@@ -71,7 +71,7 @@ def analyze(y: np.ndarray, sr: int, config: dict) -> dict:
     }
 
 
-def _compute_lufs(y: np.ndarray, sr: int) -> float | None:
+def _compute_lufs(y: np.ndarray, sr: int):
     """Calcula LUFS integrado (EBU R128) con pyloudnorm."""
     try:
         import pyloudnorm as pyln
