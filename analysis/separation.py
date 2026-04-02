@@ -53,10 +53,10 @@ def _run_demucs(audio_path: str, out_dir: str, device: str) -> None:
     """Ejecuta Demucs como subproceso."""
     cmd = [
         "python", "-m", "demucs",
-        "--model", MODEL,
-        "--device", device,
-        "--out", out_dir,
-        "--mp3",          # salida en mp3 para ahorrar espacio
+        "-n", MODEL,
+        "-d", device,
+        "-o", out_dir,
+        "--mp3",
         audio_path,
     ]
     print(f"     Ejecutando Demucs ({MODEL}) en {device}... puede tardar varios minutos.")
