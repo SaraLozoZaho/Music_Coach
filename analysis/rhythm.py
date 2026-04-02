@@ -76,7 +76,7 @@ def _tempo_curve(y: np.ndarray, sr: int) -> dict:
     # tempogram: filas = periodos, columnas = tiempo
     tg = librosa.feature.tempogram(onset_envelope=oenv, sr=sr, hop_length=hop)
     # Tempo dominante por ventana
-    tempo_per_frame = librosa.tempo(onset_envelope=oenv, sr=sr, hop_length=hop, aggregate=None)
+    tempo_per_frame = librosa.beat.tempo(onset_envelope=oenv, sr=sr, hop_length=hop, aggregate=None)
     times = librosa.frames_to_time(np.arange(len(tempo_per_frame)), sr=sr, hop_length=hop)
     step = max(1, len(times) // 500)
     return {
