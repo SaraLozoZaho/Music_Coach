@@ -5,6 +5,8 @@ Music Coach — Punto de entrada CLI.
 Uso:
     python analyze.py grabacion.mp3
     python analyze.py grabacion.mp3 --publish
+    python analyze.py grabacion.mp3 --separate          # análisis por instrumento
+    python analyze.py grabacion.mp3 --separate --publish
     python analyze.py grabacion.mp3 --output-dir mi_carpeta/
     python analyze.py grabacion.mp3 --config mi_config.yaml
 """
@@ -49,9 +51,10 @@ def main():
     )
     parser.add_argument("audio_file", help="Ruta al archivo de audio (.mp3, .wav, .m4a, .ogg, .flac, .aac)")
     parser.add_argument("--publish", action="store_true", help="Publicar en GitHub Pages tras el análisis")
+    parser.add_argument("--separate", action="store_true", help="Separar instrumentos con Demucs y analizar por pista")
     parser.add_argument("--output-dir", default=None, help="Carpeta de salida para el informe (por defecto: docs/reports/)")
     parser.add_argument("--config", default=DEFAULT_CONFIG, help="Ruta al archivo de configuración YAML")
-    parser.add_argument("--no-pitch", action="store_true", help="Omitir análisis de pitch (más rápido)")
+    parser.add_argument("--no-pitch", action="store_true", help="Omitir análisis de pitch global (más rápido)")
     args = parser.parse_args()
 
     print("\n🎵 Music Coach\n")
@@ -70,7 +73,7 @@ def main():
     _done(t)
     print(f"     Archivo: {meta['filename']}  |  Duración: {meta['duration_s']}s  |  SR: {meta['original_sr']} Hz")
 
-    # 2. Análisis de pitch
+    # 2. Análisis de pitch global
     if args.no_pitch:
         pitch_results = {
             "times": [], "frequencies": [], "confidence": [],
@@ -78,21 +81,20 @@ def main():
             "in_tune_ratio": 0.0, "problematic_segments": [], "status": "skipped"
         }
     else:
-        t = _step("Análisis de afinación (CREPE / pYIN)")
+        t = _step("Análisis de afinación global (CREPE / pYIN)")
         pitch_results = pitch_mod.analyze(y, sr, cfg.get("pitch", {}))
         _done(t)
-        status = pitch_results.get("status", "ok")
-        if status == "fallback_pyin":
+        if pitch_results.get("status") == "fallback_pyin":
             print("     [info] CREPE no instalado — usando pYIN como fallback")
 
-    # 3. Análisis rítmico
-    t = _step("Análisis rítmico")
+    # 3. Análisis rítmico global
+    t = _step("Análisis rítmico global")
     rhythm_results = rhythm_mod.analyze(y, sr, cfg.get("rhythm", {}))
     _done(t)
     print(f"     Tempo: {rhythm_results['tempo_global']:.1f} BPM  |  Desv. media: {rhythm_results['mean_deviation_ms']:.1f} ms")
 
-    # 4. Análisis de dinámica
-    t = _step("Análisis de dinámica")
+    # 4. Análisis de dinámica global
+    t = _step("Análisis de dinámica global")
     dynamics_results = dynamics_mod.analyze(y, sr, cfg.get("dynamics", {}))
     _done(t)
     lufs_str = f"  |  LUFS: {dynamics_results['lufs']}" if dynamics_results.get("lufs") else ""
@@ -104,7 +106,46 @@ def main():
     _done(t)
     print(f"     SNR estimado: {quality_results['snr_db']} dB")
 
-    # 6. Generación del informe
+    # 6. Separación de fuentes + análisis por instrumento (opcional)
+    stem_results = None
+    stem_summaries = None
+    if args.separate:
+        print()
+        print("  ── Análisis por instrumento ──────────────────────────────")
+        try:
+            from analysis.separation import separate
+            from analysis.per_stem import analyze_all, build_stem_summaries
+
+            t = _step("Separando fuentes con Demucs (htdemucs_6s)")
+            stems = separate(args.audio_file)
+            _done(t)
+            print(f"     Stems separados: {', '.join(stems.keys())}")
+
+            t = _step("Analizando cada instrumento")
+            stem_results = analyze_all(stems, cfg)
+            _done(t)
+
+            stem_summaries = build_stem_summaries(stem_results, cfg)
+            print()
+            for stem_name, summary in stem_summaries.items():
+                if stem_name.startswith("_"):
+                    continue
+                icon = {"green": "✅", "yellow": "⚠️", "red": "❌"}[summary["color"]]
+                print(f"     {icon}  {summary['instrument']}: {summary['label']}")
+
+            # Timing bajo vs batería
+            tc = stem_summaries.get("_timing_comparison")
+            if tc and tc.get("verdict"):
+                print(f"\n     🎸 Bajo: {tc['verdict']}  (σ={tc['std_offset_ms']:.0f} ms)")
+
+        except ImportError:
+            print("\n  [warn] Demucs no instalado. Instala con: pip install demucs")
+            print("  Continuando sin separación de fuentes...\n")
+        except RuntimeError as e:
+            print(f"\n  [error en separación] {e}\n")
+        print()
+
+    # 7. Generación del informe
     t = _step("Generando informe HTML")
     report_path = report_gen.generate(
         meta=meta,
@@ -114,11 +155,13 @@ def main():
         quality=quality_results,
         config=cfg,
         output_dir=output_dir,
+        stem_results=stem_results,
+        stem_summaries=stem_summaries,
     )
     _done(t)
     print(f"\n✅ Informe generado: {report_path}\n")
 
-    # 7. Publicación (opcional)
+    # 8. Publicación (opcional)
     if args.publish:
         from deploy import github_pages
         print("  → Publicando en GitHub Pages...")

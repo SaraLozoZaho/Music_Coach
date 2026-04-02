@@ -23,6 +23,8 @@ def generate(
     quality: dict,
     config: dict,
     output_dir: str = "docs/reports",
+    stem_results: dict = None,
+    stem_summaries: dict = None,
 ) -> str:
     """
     Genera el informe HTML y lo guarda en output_dir.
@@ -38,11 +40,15 @@ def generate(
     summary = _build_summary(pitch, rhythm, dynamics, quality, config)
     recommendations = _build_recommendations(pitch, rhythm, dynamics, quality, config)
 
+    # Recomendaciones por instrumento (si hay separación de fuentes)
+    stem_recommendations = {}
+    if stem_results:
+        stem_recommendations = _build_stem_recommendations(stem_results, stem_summaries, config)
+
     env = Environment(
         loader=FileSystemLoader(str(TEMPLATE_DIR)),
         autoescape=False,
     )
-    # Filtro tojson para pasar datos a JavaScript de forma segura
     env.filters["tojson"] = lambda v: json.dumps(v, ensure_ascii=False)
 
     template = env.get_template(TEMPLATE_NAME)
@@ -56,6 +62,9 @@ def generate(
         config=config,
         summary=summary,
         recommendations=recommendations,
+        stem_results=stem_results or {},
+        stem_summaries=stem_summaries or {},
+        stem_recommendations=stem_recommendations,
     )
 
     with open(output_path, "w", encoding="utf-8") as f:
@@ -221,5 +230,112 @@ def _build_recommendations(pitch, rhythm, dynamics, quality, config) -> list:
             "title": "¡Excelente ensayo!",
             "text": "Todas las métricas están dentro de los umbrales óptimos. ¡Sigue así!"
         })
+
+    return recs
+
+
+# ---------------------------------------------------------------------------
+# Recomendaciones por instrumento
+# ---------------------------------------------------------------------------
+
+STEM_ADVICE = {
+    "drums": {
+        "rhythm_bad":  "La batería establece el pulso del grupo. Practica con metrónomo hasta que el tempo sea constante.",
+        "rhythm_ok":   "Buen pulso. El grupo puede apoyarse en ti como referencia rítmica.",
+    },
+    "bass": {
+        "rhythm_bad":  "El bajo debe estar perfectamente alineado con la batería. Practica el patrón rítmico junto al baterista antes del próximo ensayo.",
+        "rhythm_ok":   "Buen timing. Mantén ese bloqueo con la batería.",
+        "pitch_bad":   "Revisa la afinación del instrumento y trabaja los cambios de posición con lentitud.",
+        "pitch_ok":    "Afinación correcta.",
+        "timing_late": "Tiendes a ir atrasado respecto a la batería. Anticipa mentalmente cada nota antes de tocarla.",
+        "timing_early":"Tiendes a adelantarte. Escucha más la batería y deja que ella marque el tempo.",
+    },
+    "guitar": {
+        "pitch_bad":   "Afina antes de cada ensayo y comprueba la afinación cada 15-20 minutos, especialmente en cuerdas agudas.",
+        "pitch_ok":    "Afinación correcta.",
+        "rhythm_bad":  "Trabaja los cambios de acorde con metrónomo para que no haya pausas entre ellos.",
+    },
+    "piano": {
+        "pitch_bad":   "El piano puede necesitar afinación por un técnico si las notas suenan descentradas.",
+        "pitch_ok":    "Afinación correcta.",
+        "rhythm_bad":  "Presta atención al tempo en los pasajes rápidos. Practica a velocidad reducida.",
+    },
+    "vocals": {
+        "pitch_bad":   "Calienta la voz antes del ensayo y practica con un drone de referencia para interiorizar la afinación.",
+        "pitch_ok":    "Afinación vocal correcta.",
+        "rhythm_bad":  "Trabaja la dicción rítmica — cada sílaba debe caer en el tiempo correcto.",
+        "stability":   "El vibrato o la fluctuación de pitch es excesiva. Trabaja el apoyo en el diafragma.",
+    },
+    "other": {
+        "rhythm_bad":  "La percusión adicional debe estar sincronizada con la batería. Practica juntos.",
+        "rhythm_ok":   "Buen ritmo en los elementos de percusión.",
+    },
+}
+
+
+def _build_stem_recommendations(stem_results: dict, stem_summaries: dict, config: dict) -> dict:
+    """Genera recomendaciones específicas por instrumento."""
+    recs = {}
+    rhythm_cfg = config.get("rhythm", {})
+    pitch_cfg = config.get("pitch", {})
+    thr_ms = rhythm_cfg.get("onset_deviation_ms", 30)
+    tol_cents = pitch_cfg.get("tolerance_cents", 20)
+    stab_thr = pitch_cfg.get("stability_threshold", 15)
+
+    advice = STEM_ADVICE
+
+    for stem_name, data in stem_results.items():
+        if stem_name.startswith("_"):
+            continue
+        stem_recs = []
+        a = advice.get(stem_name, {})
+
+        # Ritmo
+        if "rhythm" in data:
+            dev = data["rhythm"].get("mean_deviation_ms", 0)
+            if dev > thr_ms:
+                text = a.get("rhythm_bad", f"Desviación rítmica media: {dev:.0f} ms. Practica con metrónomo.")
+                stem_recs.append({"icon": "🥁", "title": "Ritmo", "text": text, "severity": "red" if dev > thr_ms*2 else "yellow"})
+            else:
+                text = a.get("rhythm_ok", f"Ritmo preciso ({dev:.0f} ms de desviación media).")
+                stem_recs.append({"icon": "✅", "title": "Ritmo", "text": text, "severity": "green"})
+
+        # Pitch
+        if "pitch" in data:
+            in_tune = data["pitch"].get("in_tune_ratio", 1)
+            stab = data["pitch"].get("stability_std", 0)
+            if in_tune < 0.7:
+                text = a.get("pitch_bad", f"Solo {in_tune*100:.0f}% del tiempo en afinación.")
+                stem_recs.append({"icon": "🎵", "title": "Afinación", "text": text, "severity": "red"})
+            elif in_tune < 0.85:
+                stem_recs.append({"icon": "🎵", "title": "Afinación", "text": f"Afinación mejorable: {in_tune*100:.0f}% en tono (±{tol_cents} cents).", "severity": "yellow"})
+            else:
+                text = a.get("pitch_ok", f"Afinación correcta ({in_tune*100:.0f}% en tono).")
+                stem_recs.append({"icon": "✅", "title": "Afinación", "text": text, "severity": "green"})
+            if stab > stab_thr and stem_name == "vocals":
+                stem_recs.append({"icon": "〰️", "title": "Estabilidad tonal", "text": a.get("stability", f"Fluctuación de pitch: σ={stab:.1f} cents."), "severity": "yellow"})
+
+        # Dinámica: clipping
+        if "dynamics" in data:
+            clip = data["dynamics"].get("clipping_ratio", 0)
+            if clip > 0.01:
+                stem_recs.append({"icon": "⚠️", "title": "Saturación", "text": f"Saturación detectada ({clip*100:.1f}% del tiempo). Revisa el nivel de grabación.", "severity": "red"})
+
+        recs[stem_name] = stem_recs
+
+    # Timing bajo vs batería
+    tc = stem_results.get("_timing_comparison", {})
+    if tc.get("verdict") and tc["verdict"] != "sincronizado":
+        mean_off = tc["mean_offset_ms"]
+        key = "timing_late" if mean_off > 0 else "timing_early"
+        bass_advice = STEM_ADVICE.get("bass", {}).get(key, tc["verdict"])
+        if "bass" in recs:
+            recs["bass"].insert(0, {
+                "icon": "🎸",
+                "title": f"Timing vs Batería — {tc['verdict']}",
+                "text": bass_advice,
+                "severity": "red" if abs(mean_off) > 50 else "yellow",
+            })
 
     return recs

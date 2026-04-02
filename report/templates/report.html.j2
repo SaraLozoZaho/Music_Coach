@@ -175,9 +175,9 @@
 
 </div>
 
-<!-- Recomendaciones -->
-<div class="card">
-  <h2>Recomendaciones</h2>
+<!-- Recomendaciones globales -->
+<div class="card" style="margin-bottom:32px">
+  <h2>Recomendaciones globales</h2>
   <ul class="recommendations">
     {% for rec in recommendations %}
     <li>
@@ -190,6 +190,131 @@
     {% endfor %}
   </ul>
 </div>
+
+{% if stem_results %}
+<!-- ── Sección por instrumento ───────────────────────────────────────── -->
+<h2 style="font-size:1.4rem; margin-bottom:20px; border-bottom:2px solid var(--border); padding-bottom:10px;">
+  Análisis por instrumento
+</h2>
+
+{% set STEM_ICONS = {"drums":"🥁","bass":"🎸","guitar":"🎸","piano":"🎹","vocals":"🎤","other":"🪘"} %}
+
+<!-- Timing bajo vs batería -->
+{% set tc = stem_summaries.get("_timing_comparison", {}) %}
+{% if tc and tc.get("verdict") %}
+<div class="card full" style="margin-bottom:24px; border-color:{% if tc.mean_offset_ms|abs > 50 %}var(--red){% elif tc.mean_offset_ms|abs > 20 %}var(--yellow){% else %}var(--green){% endif %}">
+  <h2>🎸🥁 Bajo vs Batería — Sincronización</h2>
+  <div style="display:flex; gap:32px; flex-wrap:wrap; align-items:center; margin-bottom:16px">
+    <div>
+      <div class="metric-value">{{ tc.mean_offset_ms | round(1) }} ms</div>
+      <div class="metric-label">desfase medio (+ = bajo atrasado)</div>
+    </div>
+    <div>
+      <div class="metric-value">{{ tc.std_offset_ms | round(1) }} ms</div>
+      <div class="metric-label">variabilidad (σ)</div>
+    </div>
+    <div>
+      <span class="tag {% if tc.mean_offset_ms|abs > 50 %}red{% elif tc.mean_offset_ms|abs > 20 %}yellow{% else %}green{% endif %}" style="font-size:1rem; padding:6px 14px">
+        {{ tc.verdict }}
+      </span>
+    </div>
+  </div>
+  <div class="chart-container" id="chart-timing-bass-drums"></div>
+</div>
+{% endif %}
+
+<!-- Tarjetas por instrumento -->
+{% for stem_name, data in stem_results.items() %}
+{% if not stem_name.startswith("_") %}
+{% set summary = stem_summaries.get(stem_name, {}) %}
+{% set recs = stem_recommendations.get(stem_name, []) %}
+{% set icon = STEM_ICONS.get(stem_name, "🎵") %}
+
+<div class="card full" style="margin-bottom:24px; border-left: 4px solid var(--{% if summary.color == 'green' %}green{% elif summary.color == 'yellow' %}yellow{% else %}red{% endif %})">
+  <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px">
+    <span style="font-size:2rem">{{ icon }}</span>
+    <div>
+      <h2 style="border:none; margin:0; font-size:1.3rem">{{ data.label }}</h2>
+      <span class="tag {{ summary.color }}">{{ summary.label }}</span>
+    </div>
+  </div>
+
+  <!-- Métricas clave del instrumento -->
+  <div style="display:flex; gap:24px; flex-wrap:wrap; margin-bottom:16px">
+    {% if data.get("rhythm") %}
+    <div>
+      <div class="metric-value" style="font-size:1.4rem">{{ data.rhythm.tempo_global | round(1) }} BPM</div>
+      <div class="metric-label">tempo detectado</div>
+    </div>
+    <div>
+      <div class="metric-value" style="font-size:1.4rem">{{ data.rhythm.mean_deviation_ms | round(1) }} ms</div>
+      <div class="metric-label">desviación rítmica media</div>
+    </div>
+    {% endif %}
+    {% if data.get("pitch") %}
+    <div>
+      <div class="metric-value" style="font-size:1.4rem">{{ (data.pitch.in_tune_ratio * 100) | round(1) }}%</div>
+      <div class="metric-label">tiempo en afinación</div>
+    </div>
+    <div>
+      <div class="metric-value" style="font-size:1.4rem">{{ data.pitch.stability_std | round(1) }} c</div>
+      <div class="metric-label">estabilidad tonal (σ cents)</div>
+    </div>
+    {% endif %}
+    {% if data.get("dynamics") %}
+    <div>
+      <div class="metric-value" style="font-size:1.4rem">{{ data.dynamics.dynamic_range_db }} dB</div>
+      <div class="metric-label">rango dinámico</div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Gráficas del instrumento -->
+  <div class="grid" style="margin-bottom:12px">
+    {% if data.get("rhythm") %}
+    <div class="card" style="padding:12px">
+      <h3>Tempo</h3>
+      <div id="chart-{{ stem_name }}-tempo"></div>
+    </div>
+    <div class="card" style="padding:12px">
+      <h3>Desviaciones de onset (ms)</h3>
+      <div id="chart-{{ stem_name }}-onset-hist"></div>
+    </div>
+    {% endif %}
+    {% if data.get("pitch") and data.pitch.times | length > 0 %}
+    <div class="card" style="padding:12px">
+      <h3>Pitch track (cents)</h3>
+      <div id="chart-{{ stem_name }}-pitch"></div>
+    </div>
+    {% endif %}
+    {% if data.get("dynamics") %}
+    <div class="card" style="padding:12px">
+      <h3>Volumen RMS</h3>
+      <div id="chart-{{ stem_name }}-rms"></div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Recomendaciones del instrumento -->
+  {% if recs %}
+  <h3 style="margin-top:8px; margin-bottom:8px;">Recomendaciones</h3>
+  <ul class="recommendations">
+    {% for rec in recs %}
+    <li style="border-bottom:1px solid var(--border); padding:8px 0">
+      <span class="rec-icon">{{ rec.icon }}</span>
+      <div>
+        <strong>{{ rec.title }}</strong>
+        <span class="tag {{ rec.severity }}" style="margin-left:8px; font-size:0.7rem">{{ rec.severity }}</span><br>
+        <span style="color:var(--muted)">{{ rec.text }}</span>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>
+{% endif %}
+{% endfor %}
+{% endif %}
 
 <div class="footer">
   Generado por Music Coach · {{ date }} · <a href="https://github.com/saralozozaho/music_coach" style="color:var(--accent)">GitHub</a>
@@ -310,6 +435,95 @@ const DARK = {
     height: 250
   }), {responsive:true, displayModeBar:false});
 })();
+
+{% if stem_results %}
+// ── Gráficas por instrumento ──────────────────────────────────────────
+
+const STEM_COLORS = {
+  drums:'#e74c3c', bass:'#3498db', guitar:'#2ecc71',
+  piano:'#9b59b6', vocals:'#f39c12', other:'#1abc9c'
+};
+
+{% set tc = stem_summaries.get("_timing_comparison", {}) %}
+{% if tc and tc.get("offsets_ms") %}
+// Timing bajo vs batería
+(function() {
+  const offsets = {{ tc.offsets_ms | tojson }};
+  if (!offsets.length) return;
+  Plotly.newPlot('chart-timing-bass-drums', [{
+    x: offsets, type:'histogram', nbinsx:50,
+    marker:{color:'#3498db'}
+  }], Object.assign({}, DARK, {
+    xaxis: Object.assign({}, DARK.xaxis, {title:'Desfase bajo vs batería (ms)', zeroline:true}),
+    yaxis: Object.assign({}, DARK.yaxis, {title:'Frecuencia'}),
+    height: 200,
+    shapes:[{type:'line',x0:0,x1:0,y0:0,y1:1,yref:'paper',line:{color:'#e74c3c',dash:'dot',width:2}}]
+  }), {responsive:true, displayModeBar:false});
+})();
+{% endif %}
+
+{% for stem_name, data in stem_results.items() %}
+{% if not stem_name.startswith("_") %}
+(function() {
+  const color = STEM_COLORS['{{ stem_name }}'] || '#7c6fff';
+
+  {% if data.get("rhythm") %}
+  // Tempo
+  (function(){
+    const d = {{ data.rhythm.tempo_curve | tojson }};
+    if (!d.times.length) return;
+    Plotly.newPlot('chart-{{ stem_name }}-tempo', [{
+      x:d.times, y:d.bpm, mode:'lines', line:{color:color,width:2}
+    }], Object.assign({},DARK,{
+      xaxis:Object.assign({},DARK.xaxis,{title:'Tiempo (s)'}),
+      yaxis:Object.assign({},DARK.yaxis,{title:'BPM'}), height:160
+    }),{responsive:true,displayModeBar:false});
+  })();
+  // Histograma onsets
+  (function(){
+    const devs = {{ data.rhythm.onset_deviations_ms | tojson }};
+    if (!devs.length) return;
+    Plotly.newPlot('chart-{{ stem_name }}-onset-hist', [{
+      x:devs, type:'histogram', nbinsx:40, marker:{color:color}
+    }], Object.assign({},DARK,{
+      xaxis:Object.assign({},DARK.xaxis,{title:'Desviación (ms)'}),
+      yaxis:Object.assign({},DARK.yaxis,{title:'Onsets'}), height:160
+    }),{responsive:true,displayModeBar:false});
+  })();
+  {% endif %}
+
+  {% if data.get("pitch") and data.pitch.times | length > 0 %}
+  (function(){
+    const times = {{ data.pitch.times | tojson }};
+    const cents = {{ data.pitch.cents_deviation | tojson }};
+    const tol = {{ config.pitch.tolerance_cents if config.pitch else 20 }};
+    Plotly.newPlot('chart-{{ stem_name }}-pitch', [
+      {x:[times[0],times[times.length-1]],y:[tol,tol],mode:'lines',line:{color:'#2ecc71',dash:'dot',width:1},showlegend:false},
+      {x:[times[0],times[times.length-1]],y:[-tol,-tol],mode:'lines',line:{color:'#2ecc71',dash:'dot',width:1},showlegend:false},
+      {x:times,y:cents,mode:'lines',line:{color:color,width:1.5}}
+    ], Object.assign({},DARK,{
+      xaxis:Object.assign({},DARK.xaxis,{title:'Tiempo (s)'}),
+      yaxis:Object.assign({},DARK.yaxis,{title:'Cents'}), height:160
+    }),{responsive:true,displayModeBar:false});
+  })();
+  {% endif %}
+
+  {% if data.get("dynamics") %}
+  (function(){
+    const d = {{ data.dynamics | tojson }};
+    Plotly.newPlot('chart-{{ stem_name }}-rms', [{
+      x:d.rms_times, y:d.rms_db, mode:'lines',
+      line:{color:color,width:1.5}, fill:'tozeroy', fillcolor:color+'33'
+    }], Object.assign({},DARK,{
+      xaxis:Object.assign({},DARK.xaxis,{title:'Tiempo (s)'}),
+      yaxis:Object.assign({},DARK.yaxis,{title:'dBFS'}), height:160
+    }),{responsive:true,displayModeBar:false});
+  })();
+  {% endif %}
+})();
+{% endif %}
+{% endfor %}
+{% endif %}
 </script>
 </body>
 </html>
