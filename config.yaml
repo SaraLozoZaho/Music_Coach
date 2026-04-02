@@ -1,0 +1,19 @@
+# Umbrales de análisis — ajustar según el contexto musical
+pitch:
+  tolerance_cents: 20          # ±20 cents = afinación aceptable
+  stability_threshold: 15      # desviación estándar máxima aceptable (cents)
+
+rhythm:
+  onset_deviation_ms: 30       # desviación máxima aceptable por onset
+  tempo_variance_bpm: 5        # variación de tempo tolerable
+
+dynamics:
+  min_dynamic_range_db: 10     # rango dinámico mínimo deseable
+  clipping_threshold_db: -1    # umbral para detectar saturación
+
+quality:
+  min_snr_db: 20               # SNR mínimo aceptable para la grabación
+
+report:
+  language: es                 # idioma de las recomendaciones
+  output_dir: docs/reports/

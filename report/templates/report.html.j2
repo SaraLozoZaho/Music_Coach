@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Music Coach — Informe {{ meta.filename }} — {{ date }}</title>
+  <style>
+    :root {
+      --green: #2ecc71; --yellow: #f39c12; --red: #e74c3c;
+      --bg: #0f1117; --card: #1a1d27; --border: #2d3148;
+      --text: #e8e8f0; --muted: #8888aa;
+      --accent: #7c6fff;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg); color: var(--text);
+      line-height: 1.6; padding: 24px;
+    }
+    h1 { font-size: 1.8rem; color: var(--accent); margin-bottom: 4px; }
+    h2 { font-size: 1.2rem; color: var(--accent); margin: 0 0 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    h3 { font-size: 1rem; color: var(--muted); margin-bottom: 8px; }
+    .subtitle { color: var(--muted); font-size: 0.9rem; margin-bottom: 32px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 32px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+    .card.full { grid-column: 1 / -1; }
+    .semaphore { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .dot { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; }
+    .dot.green { background: var(--green); box-shadow: 0 0 8px var(--green); }
+    .dot.yellow { background: var(--yellow); box-shadow: 0 0 8px var(--yellow); }
+    .dot.red { background: var(--red); box-shadow: 0 0 8px var(--red); }
+    .metric-value { font-size: 2rem; font-weight: 700; line-height: 1; }
+    .metric-label { font-size: 0.8rem; color: var(--muted); margin-top: 4px; }
+    .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+    .tag.green { background: rgba(46,204,113,.2); color: var(--green); }
+    .tag.yellow { background: rgba(243,156,18,.2); color: var(--yellow); }
+    .tag.red { background: rgba(231,76,60,.2); color: var(--red); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th { text-align: left; color: var(--muted); font-weight: 500; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+    td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+    tr:last-child td { border-bottom: none; }
+    .chart-container { width: 100%; }
+    .recommendations { list-style: none; }
+    .recommendations li { padding: 10px 0; border-bottom: 1px solid var(--border); display: flex; gap: 12px; }
+    .recommendations li:last-child { border-bottom: none; }
+    .rec-icon { font-size: 1.2rem; flex-shrink: 0; }
+    .footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top: 48px; padding-top: 24px; border-top: 1px solid var(--border); }
+    @media (max-width: 600px) {
+      body { padding: 16px; }
+      .metric-value { font-size: 1.5rem; }
+    }
+  </style>
+</head>
+<body>
+
+<h1>🎵 Music Coach</h1>
+<div class="subtitle">
+  <strong>{{ meta.filename }}</strong> &nbsp;·&nbsp;
+  {{ date }} &nbsp;·&nbsp;
+  Duración: {{ meta.duration_s | round(1) }} s &nbsp;·&nbsp;
+  SR: {{ meta.original_sr }} Hz &nbsp;·&nbsp;
+  Canales: {{ meta.original_channels }}
+</div>
+
+<!-- Resumen ejecutivo -->
+<div class="grid">
+  <div class="card">
+    <div class="semaphore">
+      <div class="dot {{ summary.pitch.color }}"></div>
+      <h2 style="border:none;margin:0;">Afinación</h2>
+    </div>
+    <div class="metric-value">{{ (pitch.in_tune_ratio * 100) | round(1) }}%</div>
+    <div class="metric-label">tiempo en afinación (±{{ config.pitch.tolerance_cents }} cents)</div>
+    <div style="margin-top:10px">
+      <span class="tag {{ summary.pitch.color }}">{{ summary.pitch.label }}</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="semaphore">
+      <div class="dot {{ summary.rhythm.color }}"></div>
+      <h2 style="border:none;margin:0;">Ritmo</h2>
+    </div>
+    <div class="metric-value">{{ rhythm.tempo_global | round(1) }}</div>
+    <div class="metric-label">BPM &nbsp;·&nbsp; desv. media {{ rhythm.mean_deviation_ms | round(1) }} ms</div>
+    <div style="margin-top:10px">
+      <span class="tag {{ summary.rhythm.color }}">{{ summary.rhythm.label }}</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="semaphore">
+      <div class="dot {{ summary.dynamics.color }}"></div>
+      <h2 style="border:none;margin:0;">Dinámica</h2>
+    </div>
+    <div class="metric-value">{{ dynamics.dynamic_range_db }} dB</div>
+    <div class="metric-label">rango dinámico{% if dynamics.lufs %} &nbsp;·&nbsp; {{ dynamics.lufs }} LUFS{% endif %}</div>
+    <div style="margin-top:10px">
+      <span class="tag {{ summary.dynamics.color }}">{{ summary.dynamics.label }}</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="semaphore">
+      <div class="dot {{ summary.quality.color }}"></div>
+      <h2 style="border:none;margin:0;">Calidad</h2>
+    </div>
+    <div class="metric-value">{{ quality.snr_db }} dB</div>
+    <div class="metric-label">SNR estimado</div>
+    <div style="margin-top:10px">
+      <span class="tag {{ summary.quality.color }}">{{ summary.quality.label }}</span>
+    </div>
+  </div>
+</div>
+
+<!-- Gráficas -->
+<div class="grid">
+
+  <!-- Pitch track -->
+  <div class="card full">
+    <h2>Afinación — Pitch Track</h2>
+    <div class="chart-container" id="chart-pitch"></div>
+    {% if pitch.problematic_segments %}
+    <h3 style="margin-top:16px;">Pasajes problemáticos</h3>
+    <table>
+      <thead><tr><th>Inicio (s)</th><th>Fin (s)</th><th>Desv. media (cents)</th></tr></thead>
+      <tbody>
+        {% for seg in pitch.problematic_segments %}
+        <tr>
+          <td>{{ seg.t_start | round(2) }}</td>
+          <td>{{ seg.t_end | round(2) }}</td>
+          <td><span class="tag red">{{ seg.mean_deviation_cents }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+
+  <!-- Curva de tempo -->
+  <div class="card full">
+    <h2>Ritmo — Variación de Tempo</h2>
+    <div class="chart-container" id="chart-tempo"></div>
+  </div>
+
+  <!-- Histograma de desviaciones -->
+  <div class="card">
+    <h2>Ritmo — Desviaciones de Onset</h2>
+    <div class="chart-container" id="chart-onset-hist"></div>
+  </div>
+
+  <!-- Onset strength -->
+  <div class="card">
+    <h2>Ritmo — Fuerza de Onset</h2>
+    <div class="chart-container" id="chart-onset-strength"></div>
+  </div>
+
+  <!-- RMS -->
+  <div class="card full">
+    <h2>Dinámica — Curva de Volumen (RMS)</h2>
+    <div class="chart-container" id="chart-rms"></div>
+  </div>
+
+  <!-- Espectrograma -->
+  <div class="card full">
+    <h2>Dinámica — Espectrograma</h2>
+    <div class="chart-container" id="chart-spec"></div>
+  </div>
+
+  <!-- Mel spectrogram -->
+  <div class="card full">
+    <h2>Calidad — Espectrograma Mel</h2>
+    <div class="chart-container" id="chart-mel"></div>
+  </div>
+
+</div>
+
+<!-- Recomendaciones -->
+<div class="card">
+  <h2>Recomendaciones</h2>
+  <ul class="recommendations">
+    {% for rec in recommendations %}
+    <li>
+      <span class="rec-icon">{{ rec.icon }}</span>
+      <div>
+        <strong>{{ rec.title }}</strong><br>
+        <span style="color:var(--muted)">{{ rec.text }}</span>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+
+<div class="footer">
+  Generado por Music Coach · {{ date }} · <a href="https://github.com/saralozozaho/music_coach" style="color:var(--accent)">GitHub</a>
+</div>
+
+<!-- Plotly -->
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js" charset="utf-8"></script>
+<script>
+const DARK = {
+  paper_bgcolor: '#1a1d27',
+  plot_bgcolor: '#0f1117',
+  font: { color: '#e8e8f0', size: 11 },
+  xaxis: { gridcolor: '#2d3148', zerolinecolor: '#2d3148' },
+  yaxis: { gridcolor: '#2d3148', zerolinecolor: '#2d3148' },
+  margin: { l: 50, r: 20, t: 20, b: 40 }
+};
+
+// ── Pitch track ──
+(function() {
+  const times = {{ pitch.times | tojson }};
+  const cents = {{ pitch.cents_deviation | tojson }};
+  const conf  = {{ pitch.confidence | tojson }};
+  if (!times.length) return;
+  const trace = {
+    x: times, y: cents, mode: 'lines',
+    line: { color: '#7c6fff', width: 1.5 },
+    name: 'Desv. (cents)'
+  };
+  const zone_pos = { x: [times[0], times[times.length-1]], y: [{{ config.pitch.tolerance_cents }}, {{ config.pitch.tolerance_cents }}], mode:'lines', line:{color:'#2ecc71',dash:'dot',width:1}, name:'+{{ config.pitch.tolerance_cents }} c', showlegend:false };
+  const zone_neg = { x: [times[0], times[times.length-1]], y: [-{{ config.pitch.tolerance_cents }}, -{{ config.pitch.tolerance_cents }}], mode:'lines', line:{color:'#2ecc71',dash:'dot',width:1}, name:'-{{ config.pitch.tolerance_cents }} c', showlegend:false };
+  Plotly.newPlot('chart-pitch', [zone_pos, zone_neg, trace], Object.assign({}, DARK, {
+    xaxis: Object.assign({}, DARK.xaxis, {title:'Tiempo (s)'}),
+    yaxis: Object.assign({}, DARK.yaxis, {title:'Cents'}),
+    height: 220
+  }), {responsive:true, displayModeBar:false});
+})();
+
+// ── Curva de tempo ──
+(function() {
+  const d = {{ rhythm.tempo_curve | tojson }};
+  if (!d.times.length) return;
+  Plotly.newPlot('chart-tempo', [{
+    x: d.times, y: d.bpm, mode:'lines',
+    line:{color:'#f39c12',width:2}, name:'BPM'
+  }], Object.assign({}, DARK, {
+    xaxis: Object.assign({}, DARK.xaxis, {title:'Tiempo (s)'}),
+    yaxis: Object.assign({}, DARK.yaxis, {title:'BPM'}),
+    height: 220
+  }), {responsive:true, displayModeBar:false});
+})();
+
+// ── Histograma desviaciones ──
+(function() {
+  const devs = {{ rhythm.onset_deviations_ms | tojson }};
+  if (!devs.length) return;
+  Plotly.newPlot('chart-onset-hist', [{
+    x: devs, type:'histogram', nbinsx: 40,
+    marker:{color:'#e74c3c'}
+  }], Object.assign({}, DARK, {
+    xaxis: Object.assign({}, DARK.xaxis, {title:'Desviación (ms)'}),
+    yaxis: Object.assign({}, DARK.yaxis, {title:'Onsets'}),
+    height: 220
+  }), {responsive:true, displayModeBar:false});
+})();
+
+// ── Onset strength ──
+(function() {
+  const d = {{ rhythm.onset_strength | tojson }};
+  if (!d.times.length) return;
+  Plotly.newPlot('chart-onset-strength', [{
+    x: d.times, y: d.strength, mode:'lines',
+    line:{color:'#e67e22',width:1}, fill:'tozeroy',
+    fillcolor:'rgba(230,126,34,0.2)'
+  }], Object.assign({}, DARK, {
+    xaxis: Object.assign({}, DARK.xaxis, {title:'Tiempo (s)'}),
+    yaxis: Object.assign({}, DARK.yaxis, {title:'Fuerza'}),
+    height: 220
+  }), {responsive:true, displayModeBar:false});
+})();
+
+// ── RMS ──
+(function() {
+  const d = {{ dynamics | tojson }};
+  Plotly.newPlot('chart-rms', [{
+    x: d.rms_times, y: d.rms_db, mode:'lines',
+    line:{color:'#3498db',width:1.5}, name:'RMS (dB)'
+  }], Object.assign({}, DARK, {
+    xaxis: Object.assign({}, DARK.xaxis, {title:'Tiempo (s)'}),
+    yaxis: Object.assign({}, DARK.yaxis, {title:'dBFS'}),
+    height: 200
+  }), {responsive:true, displayModeBar:false});
+})();
+
+// ── Espectrograma ──
+(function() {
+  const d = {{ dynamics.spectrogram | tojson }};
+  Plotly.newPlot('chart-spec', [{
+    z: d.magnitude_db, x: d.times, y: d.freqs,
+    type:'heatmap', colorscale:'Viridis',
+    colorbar:{title:'dB', tickfont:{size:10}}
+  }], Object.assign({}, DARK, {
+    xaxis: Object.assign({}, DARK.xaxis, {title:'Tiempo (s)'}),
+    yaxis: Object.assign({}, DARK.yaxis, {title:'Frecuencia (Hz)', type:'log'}),
+    height: 250
+  }), {responsive:true, displayModeBar:false});
+})();
+
+// ── Mel spectrogram ──
+(function() {
+  const d = {{ quality.mel_spectrogram | tojson }};
+  Plotly.newPlot('chart-mel', [{
+    z: d.magnitude_db, x: d.times, y: d.freqs_mel,
+    type:'heatmap', colorscale:'Plasma',
+    colorbar:{title:'dB', tickfont:{size:10}}
+  }], Object.assign({}, DARK, {
+    xaxis: Object.assign({}, DARK.xaxis, {title:'Tiempo (s)'}),
+    yaxis: Object.assign({}, DARK.yaxis, {title:'Mel freq.'}),
+    height: 250
+  }), {responsive:true, displayModeBar:false});
+})();
+</script>
+</body>
+</html>
