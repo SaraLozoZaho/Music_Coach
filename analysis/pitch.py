@@ -22,17 +22,15 @@ def analyze(y: np.ndarray, sr: int, config: dict) -> dict:
     """
     try:
         import crepe
-    except ImportError:
+        audio_f32 = y.astype(np.float32)
+        times, frequencies, confidence, _ = crepe.predict(
+            audio_f32, sr, viterbi=True, verbose=0
+        )
+    except (ImportError, ModuleNotFoundError, Exception):
         return _fallback_pitch(y, sr, config)
 
     tolerance = config.get("tolerance_cents", 20)
     stability_thr = config.get("stability_threshold", 15)
-
-    # CREPE espera audio mono float32 a la sr original
-    audio_f32 = y.astype(np.float32)
-    times, frequencies, confidence, _ = crepe.predict(
-        audio_f32, sr, viterbi=True, verbose=0
-    )
 
     # Filtrar frames con confianza baja
     mask = confidence > 0.5
