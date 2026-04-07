@@ -1,16 +1,16 @@
 """
-Análisis por instrumento/stem.
+Per-instrument/stem analysis.
 
-Cada stem recibe el análisis más relevante según su naturaleza:
-  - Batería:          ritmo (timing, tempo, precisión)
-  - Bajo:             ritmo (vs batería) + pitch
-  - Guitarra:         pitch + dinámica
-  - Piano:            pitch + dinámica
-  - Voces:            pitch + dinámica
-  - Percusión/Otros:  ritmo + dinámica
+Each stem receives the most relevant analysis for its nature:
+  - Drums:            rhythm (timing, tempo, precision)
+  - Bass:             rhythm (vs drums) + pitch
+  - Guitar:           pitch + dynamics
+  - Piano:            pitch + dynamics
+  - Vocals:           pitch + dynamics
+  - Percussion/Other: rhythm + dynamics
 
-El resultado incluye comparativa de timing bajo vs batería para detectar
-si el bajista va adelantado o atrasado.
+The result includes a timing comparison between bass and drums to detect
+whether the bassist is ahead of or behind the drummer.
 """
 
 import numpy as np
@@ -21,7 +21,7 @@ from analysis import dynamics as dynamics_mod
 from analysis.separation import STEM_LABELS
 
 
-# Qué análisis hacer por stem
+# Which analyses to run per stem
 STEM_ANALYSES = {
     "drums":  ["rhythm", "dynamics"],
     "bass":   ["rhythm", "pitch", "dynamics"],
@@ -36,7 +36,7 @@ SR = 22050
 
 def analyze_all(stems: dict, config: dict) -> dict:
     """
-    Analiza todos los stems disponibles.
+    Analyses all available stems.
 
     Returns:
         dict {stem_name: {"label": str, "rhythm": ..., "pitch": ..., "dynamics": ...}}
@@ -55,7 +55,7 @@ def analyze_all(stems: dict, config: dict) -> dict:
 
         results[stem_name] = result
 
-    # Comparativa de timing: bajo vs batería
+    # Timing comparison: bass vs drums
     if "bass" in results and "drums" in results:
         results["_timing_comparison"] = _compare_timing(
             results["bass"]["rhythm"],
@@ -67,10 +67,10 @@ def analyze_all(stems: dict, config: dict) -> dict:
 
 def _compare_timing(bass_rhythm: dict, drums_rhythm: dict) -> dict:
     """
-    Compara los onsets del bajo con los de la batería para detectar
-    si el bajista va adelantado (+) o atrasado (-) respecto al drummer.
+    Compares bass onsets against drum onsets to detect whether the bassist
+    is behind (+) or ahead (-) of the drummer.
 
-    Returns dict con estadísticas y lista de desfases.
+    Returns dict with statistics and list of offsets.
     """
     bass_onsets = np.array(bass_rhythm.get("onset_times", []))
     drums_onsets = np.array(drums_rhythm.get("onset_times", []))
@@ -78,12 +78,12 @@ def _compare_timing(bass_rhythm: dict, drums_rhythm: dict) -> dict:
     if len(bass_onsets) == 0 or len(drums_onsets) == 0:
         return {"mean_offset_ms": 0.0, "std_offset_ms": 0.0, "offsets_ms": []}
 
-    # Para cada onset del bajo, encontrar el onset de batería más cercano
+    # For each bass onset, find the nearest drum onset
     offsets = []
     for bt in bass_onsets:
         nearest_drum = drums_onsets[np.argmin(np.abs(drums_onsets - bt))]
         offset_ms = (bt - nearest_drum) * 1000
-        # Solo considerar pares cercanos (< 200 ms)
+        # Only consider close pairs (< 200 ms)
         if abs(offset_ms) < 200:
             offsets.append(round(float(offset_ms), 1))
 
@@ -94,25 +94,25 @@ def _compare_timing(bass_rhythm: dict, drums_rhythm: dict) -> dict:
     mean_offset = float(np.mean(arr))
     std_offset = float(np.std(arr))
 
-    # Veredicto
+    # Verdict
     if abs(mean_offset) < 20:
-        verdict = "sincronizado"
+        verdict = "in sync"
     elif mean_offset > 0:
-        verdict = f"atrasado {abs(mean_offset):.0f} ms respecto a la batería"
+        verdict = f"behind the drums by {abs(mean_offset):.0f} ms"
     else:
-        verdict = f"adelantado {abs(mean_offset):.0f} ms respecto a la batería"
+        verdict = f"ahead of the drums by {abs(mean_offset):.0f} ms"
 
     return {
         "mean_offset_ms": round(mean_offset, 1),
         "std_offset_ms": round(std_offset, 1),
-        "offsets_ms": offsets[::max(1, len(offsets)//500)],  # submuestreado
+        "offsets_ms": offsets[::max(1, len(offsets)//500)],  # downsampled
         "verdict": verdict,
     }
 
 
 def build_stem_summaries(stem_results: dict, config: dict) -> dict:
     """
-    Genera un semáforo y recomendación corta para cada instrumento.
+    Builds a traffic-light status and short label for each instrument.
     """
     summaries = {}
     pitch_cfg = config.get("pitch", {})
@@ -126,15 +126,15 @@ def build_stem_summaries(stem_results: dict, config: dict) -> dict:
         issues = []
         color = "green"
 
-        # Ritmo
+        # Rhythm
         if "rhythm" in data:
             dev = data["rhythm"].get("mean_deviation_ms", 0)
             thr = rhythm_cfg.get("onset_deviation_ms", 30)
             if dev > thr * 2:
-                issues.append(f"ritmo muy irregular ({dev:.0f} ms)")
+                issues.append(f"very irregular rhythm ({dev:.0f} ms)")
                 color = "red"
             elif dev > thr:
-                issues.append(f"pequeñas irregularidades rítmicas ({dev:.0f} ms)")
+                issues.append(f"minor rhythmic irregularities ({dev:.0f} ms)")
                 if color == "green":
                     color = "yellow"
 
@@ -142,29 +142,29 @@ def build_stem_summaries(stem_results: dict, config: dict) -> dict:
         if "pitch" in data:
             in_tune = data["pitch"].get("in_tune_ratio", 1)
             if in_tune < 0.6:
-                issues.append(f"afinación deficiente ({in_tune*100:.0f}% en tono)")
+                issues.append(f"poor tuning ({in_tune*100:.0f}% in tune)")
                 color = "red"
             elif in_tune < 0.8:
-                issues.append(f"afinación mejorable ({in_tune*100:.0f}% en tono)")
+                issues.append(f"tuning needs work ({in_tune*100:.0f}% in tune)")
                 if color == "green":
                     color = "yellow"
 
-        # Dinámica (clipping)
+        # Dynamics (clipping)
         if "dynamics" in data:
             clip = data["dynamics"].get("clipping_ratio", 0)
             if clip > 0.01:
-                issues.append("saturación detectada")
+                issues.append("clipping detected")
                 if color == "green":
                     color = "yellow"
 
-        label = "Sin problemas detectados" if not issues else " · ".join(issues)
+        label = "No issues detected" if not issues else " · ".join(issues)
         summaries[stem_name] = {
             "color": color,
             "label": label,
             "instrument": STEM_LABELS.get(stem_name, stem_name),
         }
 
-    # Añadir timing comparison si existe
+    # Add timing comparison if available
     if "_timing_comparison" in stem_results:
         tc = stem_results["_timing_comparison"]
         summaries["_timing_comparison"] = tc

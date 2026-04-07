@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Music Coach — Informe {{ meta.filename }} — {{ date }}</title>
+  <title>Music Coach — Report {{ meta.filename }} — {{ date }}</title>
   <style>
     :root {
       --green: #2ecc71; --yellow: #f39c12; --red: #e74c3c;
@@ -57,20 +57,20 @@
 <div class="subtitle">
   <strong>{{ meta.filename }}</strong> &nbsp;·&nbsp;
   {{ date }} &nbsp;·&nbsp;
-  Duración: {{ meta.duration_s | round(1) }} s &nbsp;·&nbsp;
+  Duration: {{ meta.duration_s | round(1) }} s &nbsp;·&nbsp;
   SR: {{ meta.original_sr }} Hz &nbsp;·&nbsp;
-  Canales: {{ meta.original_channels }}
+  Channels: {{ meta.original_channels }}
 </div>
 
-<!-- Resumen ejecutivo -->
+<!-- Executive summary -->
 <div class="grid">
   <div class="card">
     <div class="semaphore">
       <div class="dot {{ summary.pitch.color }}"></div>
-      <h2 style="border:none;margin:0;">Afinación</h2>
+      <h2 style="border:none;margin:0;">Tuning</h2>
     </div>
     <div class="metric-value">{{ (pitch.in_tune_ratio * 100) | round(1) }}%</div>
-    <div class="metric-label">tiempo en afinación (±{{ config.pitch.tolerance_cents }} cents)</div>
+    <div class="metric-label">time in tune (±{{ config.pitch.tolerance_cents }} cents)</div>
     <div style="margin-top:10px">
       <span class="tag {{ summary.pitch.color }}">{{ summary.pitch.label }}</span>
     </div>
@@ -79,10 +79,10 @@
   <div class="card">
     <div class="semaphore">
       <div class="dot {{ summary.rhythm.color }}"></div>
-      <h2 style="border:none;margin:0;">Ritmo</h2>
+      <h2 style="border:none;margin:0;">Rhythm</h2>
     </div>
     <div class="metric-value">{{ rhythm.tempo_global | round(1) }}</div>
-    <div class="metric-label">BPM &nbsp;·&nbsp; desv. media {{ rhythm.mean_deviation_ms | round(1) }} ms</div>
+    <div class="metric-label">BPM &nbsp;·&nbsp; mean deviation {{ rhythm.mean_deviation_ms | round(1) }} ms</div>
     <div style="margin-top:10px">
       <span class="tag {{ summary.rhythm.color }}">{{ summary.rhythm.label }}</span>
     </div>
@@ -91,10 +91,10 @@
   <div class="card">
     <div class="semaphore">
       <div class="dot {{ summary.dynamics.color }}"></div>
-      <h2 style="border:none;margin:0;">Dinámica</h2>
+      <h2 style="border:none;margin:0;">Dynamics</h2>
     </div>
     <div class="metric-value">{{ dynamics.dynamic_range_db }} dB</div>
-    <div class="metric-label">rango dinámico{% if dynamics.lufs %} &nbsp;·&nbsp; {{ dynamics.lufs }} LUFS{% endif %}</div>
+    <div class="metric-label">dynamic range{% if dynamics.lufs %} &nbsp;·&nbsp; {{ dynamics.lufs }} LUFS{% endif %}</div>
     <div style="margin-top:10px">
       <span class="tag {{ summary.dynamics.color }}">{{ summary.dynamics.label }}</span>
     </div>
@@ -103,10 +103,10 @@
   <div class="card">
     <div class="semaphore">
       <div class="dot {{ summary.quality.color }}"></div>
-      <h2 style="border:none;margin:0;">Calidad</h2>
+      <h2 style="border:none;margin:0;">Quality</h2>
     </div>
     <div class="metric-value">{{ quality.snr_db }} dB</div>
-    <div class="metric-label">SNR estimado</div>
+    <div class="metric-label">estimated SNR</div>
     <div style="margin-top:10px">
       <span class="tag {{ summary.quality.color }}">{{ summary.quality.label }}</span>
     </div>
@@ -118,12 +118,12 @@
 
   <!-- Pitch track -->
   <div class="card full">
-    <h2>Afinación — Pitch Track</h2>
+    <h2>Tuning — Pitch Track</h2>
     <div class="chart-container" id="chart-pitch"></div>
     {% if pitch.problematic_segments %}
-    <h3 style="margin-top:16px;">Pasajes problemáticos</h3>
+    <h3 style="margin-top:16px;">Problematic passages</h3>
     <table>
-      <thead><tr><th>Inicio (s)</th><th>Fin (s)</th><th>Desv. media (cents)</th></tr></thead>
+      <thead><tr><th>Start (s)</th><th>End (s)</th><th>Mean deviation (cents)</th></tr></thead>
       <tbody>
         {% for seg in pitch.problematic_segments %}
         <tr>
@@ -137,47 +137,47 @@
     {% endif %}
   </div>
 
-  <!-- Curva de tempo -->
+  <!-- Tempo curve -->
   <div class="card full">
-    <h2>Ritmo — Variación de Tempo</h2>
+    <h2>Rhythm — Tempo Variation</h2>
     <div class="chart-container" id="chart-tempo"></div>
   </div>
 
-  <!-- Histograma de desviaciones -->
+  <!-- Onset deviation histogram -->
   <div class="card">
-    <h2>Ritmo — Desviaciones de Onset</h2>
+    <h2>Rhythm — Onset Deviations</h2>
     <div class="chart-container" id="chart-onset-hist"></div>
   </div>
 
   <!-- Onset strength -->
   <div class="card">
-    <h2>Ritmo — Fuerza de Onset</h2>
+    <h2>Rhythm — Onset Strength</h2>
     <div class="chart-container" id="chart-onset-strength"></div>
   </div>
 
   <!-- RMS -->
   <div class="card full">
-    <h2>Dinámica — Curva de Volumen (RMS)</h2>
+    <h2>Dynamics — Volume Curve (RMS)</h2>
     <div class="chart-container" id="chart-rms"></div>
   </div>
 
-  <!-- Espectrograma -->
+  <!-- Spectrogram -->
   <div class="card full">
-    <h2>Dinámica — Espectrograma</h2>
+    <h2>Dynamics — Spectrogram</h2>
     <div class="chart-container" id="chart-spec"></div>
   </div>
 
   <!-- Mel spectrogram -->
   <div class="card full">
-    <h2>Calidad — Espectrograma Mel</h2>
+    <h2>Quality — Mel Spectrogram</h2>
     <div class="chart-container" id="chart-mel"></div>
   </div>
 
 </div>
 
-<!-- Recomendaciones globales -->
+<!-- Global recommendations -->
 <div class="card" style="margin-bottom:32px">
-  <h2>Recomendaciones globales</h2>
+  <h2>Global Recommendations</h2>
   <ul class="recommendations">
     {% for rec in recommendations %}
     <li>
@@ -192,26 +192,26 @@
 </div>
 
 {% if stem_results %}
-<!-- ── Sección por instrumento ───────────────────────────────────────── -->
+<!-- ── Per-instrument section ────────────────────────────────────────── -->
 <h2 style="font-size:1.4rem; margin-bottom:20px; border-bottom:2px solid var(--border); padding-bottom:10px;">
-  Análisis por instrumento
+  Per-Instrument Analysis
 </h2>
 
 {% set STEM_ICONS = {"drums":"🥁","bass":"🎸","guitar":"🎸","piano":"🎹","vocals":"🎤","other":"🪘"} %}
 
-<!-- Timing bajo vs batería -->
+<!-- Bass vs drums timing -->
 {% set tc = stem_summaries.get("_timing_comparison", {}) %}
 {% if tc and tc.get("verdict") %}
 <div class="card full" style="margin-bottom:24px; border-color:{% if tc.mean_offset_ms|abs > 50 %}var(--red){% elif tc.mean_offset_ms|abs > 20 %}var(--yellow){% else %}var(--green){% endif %}">
-  <h2>🎸🥁 Bajo vs Batería — Sincronización</h2>
+  <h2>🎸🥁 Bass vs Drums — Synchronisation</h2>
   <div style="display:flex; gap:32px; flex-wrap:wrap; align-items:center; margin-bottom:16px">
     <div>
       <div class="metric-value">{{ tc.mean_offset_ms | round(1) }} ms</div>
-      <div class="metric-label">desfase medio (+ = bajo atrasado)</div>
+      <div class="metric-label">mean offset (+ = bass behind)</div>
     </div>
     <div>
       <div class="metric-value">{{ tc.std_offset_ms | round(1) }} ms</div>
-      <div class="metric-label">variabilidad (σ)</div>
+      <div class="metric-label">variability (σ)</div>
     </div>
     <div>
       <span class="tag {% if tc.mean_offset_ms|abs > 50 %}red{% elif tc.mean_offset_ms|abs > 20 %}yellow{% else %}green{% endif %}" style="font-size:1rem; padding:6px 14px">
@@ -244,27 +244,27 @@
     {% if data.get("rhythm") %}
     <div>
       <div class="metric-value" style="font-size:1.4rem">{{ data.rhythm.tempo_global | round(1) }} BPM</div>
-      <div class="metric-label">tempo detectado</div>
+      <div class="metric-label">detected tempo</div>
     </div>
     <div>
       <div class="metric-value" style="font-size:1.4rem">{{ data.rhythm.mean_deviation_ms | round(1) }} ms</div>
-      <div class="metric-label">desviación rítmica media</div>
+      <div class="metric-label">mean rhythmic deviation</div>
     </div>
     {% endif %}
     {% if data.get("pitch") %}
     <div>
       <div class="metric-value" style="font-size:1.4rem">{{ (data.pitch.in_tune_ratio * 100) | round(1) }}%</div>
-      <div class="metric-label">tiempo en afinación</div>
+      <div class="metric-label">time in tune</div>
     </div>
     <div>
       <div class="metric-value" style="font-size:1.4rem">{{ data.pitch.stability_std | round(1) }} c</div>
-      <div class="metric-label">estabilidad tonal (σ cents)</div>
+      <div class="metric-label">tonal stability (σ cents)</div>
     </div>
     {% endif %}
     {% if data.get("dynamics") %}
     <div>
       <div class="metric-value" style="font-size:1.4rem">{{ data.dynamics.dynamic_range_db }} dB</div>
-      <div class="metric-label">rango dinámico</div>
+      <div class="metric-label">dynamic range</div>
     </div>
     {% endif %}
   </div>
@@ -277,7 +277,7 @@
       <div id="chart-{{ stem_name }}-tempo"></div>
     </div>
     <div class="card" style="padding:12px">
-      <h3>Desviaciones de onset (ms)</h3>
+      <h3>Onset deviations (ms)</h3>
       <div id="chart-{{ stem_name }}-onset-hist"></div>
     </div>
     {% endif %}
@@ -289,15 +289,15 @@
     {% endif %}
     {% if data.get("dynamics") %}
     <div class="card" style="padding:12px">
-      <h3>Volumen RMS</h3>
+      <h3>RMS Volume</h3>
       <div id="chart-{{ stem_name }}-rms"></div>
     </div>
     {% endif %}
   </div>
 
-  <!-- Recomendaciones del instrumento -->
+  <!-- Instrument recommendations -->
   {% if recs %}
-  <h3 style="margin-top:8px; margin-bottom:8px;">Recomendaciones</h3>
+  <h3 style="margin-top:8px; margin-bottom:8px;">Recommendations</h3>
   <ul class="recommendations">
     {% for rec in recs %}
     <li style="border-bottom:1px solid var(--border); padding:8px 0">
@@ -317,7 +317,7 @@
 {% endif %}
 
 <div class="footer">
-  Generado por Music Coach · {{ date }} · <a href="https://github.com/saralozozaho/music_coach" style="color:var(--accent)">GitHub</a>
+  Generated by Music Coach · {{ date }} · <a href="https://github.com/saralozozaho/music_coach" style="color:var(--accent)">GitHub</a>
 </div>
 
 <!-- Plotly -->
@@ -341,12 +341,12 @@ const DARK = {
   const trace = {
     x: times, y: cents, mode: 'lines',
     line: { color: '#7c6fff', width: 1.5 },
-    name: 'Desv. (cents)'
+    name: 'Dev. (cents)'
   };
   const zone_pos = { x: [times[0], times[times.length-1]], y: [{{ config.pitch.tolerance_cents }}, {{ config.pitch.tolerance_cents }}], mode:'lines', line:{color:'#2ecc71',dash:'dot',width:1}, name:'+{{ config.pitch.tolerance_cents }} c', showlegend:false };
   const zone_neg = { x: [times[0], times[times.length-1]], y: [-{{ config.pitch.tolerance_cents }}, -{{ config.pitch.tolerance_cents }}], mode:'lines', line:{color:'#2ecc71',dash:'dot',width:1}, name:'-{{ config.pitch.tolerance_cents }} c', showlegend:false };
   Plotly.newPlot('chart-pitch', [zone_pos, zone_neg, trace], Object.assign({}, DARK, {
-    xaxis: Object.assign({}, DARK.xaxis, {title:'Tiempo (s)'}),
+    xaxis: Object.assign({}, DARK.xaxis, {title:'Time (s)'}),
     yaxis: Object.assign({}, DARK.yaxis, {title:'Cents'}),
     height: 220
   }), {responsive:true, displayModeBar:false});
@@ -360,7 +360,7 @@ const DARK = {
     x: d.times, y: d.bpm, mode:'lines',
     line:{color:'#f39c12',width:2}, name:'BPM'
   }], Object.assign({}, DARK, {
-    xaxis: Object.assign({}, DARK.xaxis, {title:'Tiempo (s)'}),
+    xaxis: Object.assign({}, DARK.xaxis, {title:'Time (s)'}),
     yaxis: Object.assign({}, DARK.yaxis, {title:'BPM'}),
     height: 220
   }), {responsive:true, displayModeBar:false});
@@ -374,8 +374,8 @@ const DARK = {
     x: devs, type:'histogram', nbinsx: 40,
     marker:{color:'#e74c3c'}
   }], Object.assign({}, DARK, {
-    xaxis: Object.assign({}, DARK.xaxis, {title:'Desviación (ms)'}),
-    yaxis: Object.assign({}, DARK.yaxis, {title:'Onsets'}),
+    xaxis: Object.assign({}, DARK.xaxis, {title:'Deviation (ms)'}),
+    yaxis: Object.assign({}, DARK.yaxis, {title:'Onsets (count)'}),
     height: 220
   }), {responsive:true, displayModeBar:false});
 })();
@@ -389,8 +389,8 @@ const DARK = {
     line:{color:'#e67e22',width:1}, fill:'tozeroy',
     fillcolor:'rgba(230,126,34,0.2)'
   }], Object.assign({}, DARK, {
-    xaxis: Object.assign({}, DARK.xaxis, {title:'Tiempo (s)'}),
-    yaxis: Object.assign({}, DARK.yaxis, {title:'Fuerza'}),
+    xaxis: Object.assign({}, DARK.xaxis, {title:'Time (s)'}),
+    yaxis: Object.assign({}, DARK.yaxis, {title:'Strength'}),
     height: 220
   }), {responsive:true, displayModeBar:false});
 })();
@@ -402,7 +402,7 @@ const DARK = {
     x: d.rms_times, y: d.rms_db, mode:'lines',
     line:{color:'#3498db',width:1.5}, name:'RMS (dB)'
   }], Object.assign({}, DARK, {
-    xaxis: Object.assign({}, DARK.xaxis, {title:'Tiempo (s)'}),
+    xaxis: Object.assign({}, DARK.xaxis, {title:'Time (s)'}),
     yaxis: Object.assign({}, DARK.yaxis, {title:'dBFS'}),
     height: 200
   }), {responsive:true, displayModeBar:false});
@@ -416,8 +416,8 @@ const DARK = {
     type:'heatmap', colorscale:'Viridis',
     colorbar:{title:'dB', tickfont:{size:10}}
   }], Object.assign({}, DARK, {
-    xaxis: Object.assign({}, DARK.xaxis, {title:'Tiempo (s)'}),
-    yaxis: Object.assign({}, DARK.yaxis, {title:'Frecuencia (Hz)', type:'log'}),
+    xaxis: Object.assign({}, DARK.xaxis, {title:'Time (s)'}),
+    yaxis: Object.assign({}, DARK.yaxis, {title:'Frequency (Hz)', type:'log'}),
     height: 250
   }), {responsive:true, displayModeBar:false});
 })();
@@ -430,8 +430,8 @@ const DARK = {
     type:'heatmap', colorscale:'Plasma',
     colorbar:{title:'dB', tickfont:{size:10}}
   }], Object.assign({}, DARK, {
-    xaxis: Object.assign({}, DARK.xaxis, {title:'Tiempo (s)'}),
-    yaxis: Object.assign({}, DARK.yaxis, {title:'Mel freq.'}),
+    xaxis: Object.assign({}, DARK.xaxis, {title:'Time (s)'}),
+    yaxis: Object.assign({}, DARK.yaxis, {title:'Mel freq. (Hz)'}),
     height: 250
   }), {responsive:true, displayModeBar:false});
 })();
@@ -454,8 +454,8 @@ const STEM_COLORS = {
     x: offsets, type:'histogram', nbinsx:50,
     marker:{color:'#3498db'}
   }], Object.assign({}, DARK, {
-    xaxis: Object.assign({}, DARK.xaxis, {title:'Desfase bajo vs batería (ms)', zeroline:true}),
-    yaxis: Object.assign({}, DARK.yaxis, {title:'Frecuencia'}),
+    xaxis: Object.assign({}, DARK.xaxis, {title:'Bass vs Drums offset (ms)', zeroline:true}),
+    yaxis: Object.assign({}, DARK.yaxis, {title:'Count'}),
     height: 200,
     shapes:[{type:'line',x0:0,x1:0,y0:0,y1:1,yref:'paper',line:{color:'#e74c3c',dash:'dot',width:2}}]
   }), {responsive:true, displayModeBar:false});
@@ -475,7 +475,7 @@ const STEM_COLORS = {
     Plotly.newPlot('chart-{{ stem_name }}-tempo', [{
       x:d.times, y:d.bpm, mode:'lines', line:{color:color,width:2}
     }], Object.assign({},DARK,{
-      xaxis:Object.assign({},DARK.xaxis,{title:'Tiempo (s)'}),
+      xaxis:Object.assign({},DARK.xaxis,{title:'Time (s)'}),
       yaxis:Object.assign({},DARK.yaxis,{title:'BPM'}), height:160
     }),{responsive:true,displayModeBar:false});
   })();
@@ -486,8 +486,8 @@ const STEM_COLORS = {
     Plotly.newPlot('chart-{{ stem_name }}-onset-hist', [{
       x:devs, type:'histogram', nbinsx:40, marker:{color:color}
     }], Object.assign({},DARK,{
-      xaxis:Object.assign({},DARK.xaxis,{title:'Desviación (ms)'}),
-      yaxis:Object.assign({},DARK.yaxis,{title:'Onsets'}), height:160
+      xaxis:Object.assign({},DARK.xaxis,{title:'Deviation (ms)'}),
+      yaxis:Object.assign({},DARK.yaxis,{title:'Onsets (count)'}), height:160
     }),{responsive:true,displayModeBar:false});
   })();
   {% endif %}
@@ -502,7 +502,7 @@ const STEM_COLORS = {
       {x:[times[0],times[times.length-1]],y:[-tol,-tol],mode:'lines',line:{color:'#2ecc71',dash:'dot',width:1},showlegend:false},
       {x:times,y:cents,mode:'lines',line:{color:color,width:1.5}}
     ], Object.assign({},DARK,{
-      xaxis:Object.assign({},DARK.xaxis,{title:'Tiempo (s)'}),
+      xaxis:Object.assign({},DARK.xaxis,{title:'Time (s)'}),
       yaxis:Object.assign({},DARK.yaxis,{title:'Cents'}), height:160
     }),{responsive:true,displayModeBar:false});
   })();
@@ -515,7 +515,7 @@ const STEM_COLORS = {
       x:d.rms_times, y:d.rms_db, mode:'lines',
       line:{color:color,width:1.5}, fill:'tozeroy', fillcolor:color+'33'
     }], Object.assign({},DARK,{
-      xaxis:Object.assign({},DARK.xaxis,{title:'Tiempo (s)'}),
+      xaxis:Object.assign({},DARK.xaxis,{title:'Time (s)'}),
       yaxis:Object.assign({},DARK.yaxis,{title:'dBFS'}), height:160
     }),{responsive:true,displayModeBar:false});
   })();

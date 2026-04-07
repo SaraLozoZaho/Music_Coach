@@ -1,6 +1,6 @@
 """
-Módulo de análisis de calidad global.
-Métricas: SNR, spectral centroid, zero-crossing rate, mel spectrogram, MFCC.
+Global quality analysis module.
+Metrics: SNR, spectral centroid, zero-crossing rate, mel spectrogram, MFCC.
 """
 
 import numpy as np
@@ -9,22 +9,22 @@ import librosa
 
 def analyze(y: np.ndarray, sr: int, config: dict) -> dict:
     """
-    Analiza la calidad global de la grabación.
+    Analyses the global quality of a recording.
 
-    Returns dict con:
-      - snr_db: Signal-to-Noise Ratio estimado (dB)
-      - spectral_centroid_mean: centroide espectral medio (Hz)
-      - spectral_rolloff_mean: rolloff espectral medio (Hz)
-      - zcr_mean: zero-crossing rate media
-      - silence_ratio: fracción del tiempo en silencio
-      - mel_spectrogram: dict {times, freqs_mel, magnitude_db} submuestreado
-      - mfcc_mean: vector de 13 coeficientes MFCC medios
+    Returns dict with:
+      - snr_db: estimated Signal-to-Noise Ratio (dB)
+      - spectral_centroid_mean: mean spectral centroid (Hz)
+      - spectral_rolloff_mean: mean spectral rolloff (Hz)
+      - zcr_mean: mean zero-crossing rate
+      - silence_ratio: fraction of time in silence
+      - mel_spectrogram: dict {times, freqs_mel, magnitude_db} downsampled
+      - mfcc_mean: vector of 13 mean MFCC coefficients
     """
     min_snr = config.get("min_snr_db", 20)
     hop = 512
 
-    # SNR estimado: relación entre RMS total y RMS del ruido de fondo
-    # El ruido de fondo se estima como el percentil 10 del RMS
+    # Estimated SNR: ratio between total RMS and background noise RMS
+    # Background noise is estimated as the 10th percentile of the RMS
     rms_frames = librosa.feature.rms(y=y, hop_length=hop)[0]
     rms_db = librosa.amplitude_to_db(rms_frames, ref=np.max)
     noise_floor = float(np.percentile(rms_db, 10))
@@ -36,10 +36,10 @@ def analyze(y: np.ndarray, sr: int, config: dict) -> dict:
     rolloff = librosa.feature.spectral_rolloff(y=y, sr=sr, hop_length=hop)[0]
     zcr = librosa.feature.zero_crossing_rate(y=y, hop_length=hop)[0]
 
-    # Silencios: frames con RMS < -60 dB (relativo al máximo)
+    # Silences: frames with RMS < -40 dB (relative to max)
     silence_ratio = float(np.mean(rms_db < -40))
 
-    # Mel spectrogram (submuestreado)
+    # Mel spectrogram (downsampled)
     mel_spec = librosa.feature.melspectrogram(y=y, sr=sr, hop_length=hop, n_mels=64)
     mel_db = librosa.power_to_db(mel_spec, ref=np.max)
     time_step = max(1, mel_db.shape[1] // 300)

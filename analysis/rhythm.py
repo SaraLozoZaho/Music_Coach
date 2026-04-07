@@ -1,6 +1,6 @@
 """
-Módulo de análisis rítmico usando librosa.
-Métricas: BPM, variación de tempo, precisión de onsets, IOI.
+Rhythm analysis module using librosa.
+Metrics: BPM, tempo variation, onset precision, IOI.
 """
 
 import numpy as np
@@ -9,43 +9,43 @@ import librosa
 
 def analyze(y: np.ndarray, sr: int, config: dict) -> dict:
     """
-    Analiza el ritmo de la señal de audio.
+    Analyses the rhythm of an audio signal.
 
-    Returns dict con:
-      - tempo_global: BPM estimado global
-      - tempo_curve: dict {times, bpm} — variación de tempo en el tiempo
-      - onset_times: lista de tiempos de onset (s)
-      - onset_deviations_ms: desviación de cada onset respecto al beat grid (ms)
-      - mean_deviation_ms: desviación media (ms)
-      - ioi_stats: dict {mean_ms, std_ms, cv} — inter-onset interval
-      - onset_strength: dict {times, strength} — envolvente de fuerza de onset
+    Returns dict with:
+      - tempo_global: estimated global BPM
+      - tempo_curve: dict {times, bpm} — tempo variation over time
+      - onset_times: list of onset times (s)
+      - onset_deviations_ms: deviation of each onset from the beat grid (ms)
+      - mean_deviation_ms: mean deviation (ms)
+      - ioi_stats: dict {mean_ms, std_ms, cv} — inter-onset interval stats
+      - onset_strength: dict {times, strength} — onset strength envelope
     """
     onset_dev_thr = config.get("onset_deviation_ms", 30)
 
-    # Detección de beats y tempo global
+    # Beat and global tempo detection
     tempo_arr, beat_frames = librosa.beat.beat_track(y=y, sr=sr, units="frames")
     tempo_global = float(tempo_arr[0]) if hasattr(tempo_arr, '__len__') else float(tempo_arr)
     beat_times = librosa.frames_to_time(beat_frames, sr=sr)
 
-    # Curva de tempo local (ventanas de ~8 beats)
+    # Local tempo curve (overlapping windows)
     tempo_curve = _tempo_curve(y, sr)
 
-    # Detección de onsets
+    # Onset detection
     onset_frames = librosa.onset.onset_detect(y=y, sr=sr, units="frames")
     onset_times = librosa.frames_to_time(onset_frames, sr=sr).tolist()
 
-    # Desviación de onsets respecto al beat grid
+    # Onset deviations from beat grid
     deviations_ms = _onset_deviations(onset_times, beat_times.tolist())
     mean_dev = float(np.mean(np.abs(deviations_ms))) if deviations_ms else 0.0
 
     # Inter-onset intervals
     ioi_stats = _ioi_stats(onset_times)
 
-    # Onset strength envelope (submuestreado para no saturar el HTML)
+    # Onset strength envelope (downsampled to avoid bloating the HTML)
     hop = 512
     strength = librosa.onset.onset_strength(y=y, sr=sr, hop_length=hop)
     strength_times = librosa.frames_to_time(np.arange(len(strength)), sr=sr, hop_length=hop)
-    # Submuestrear a máx 1000 puntos
+    # Downsample to max 1000 points
     step = max(1, len(strength) // 1000)
     onset_strength = {
         "times": strength_times[::step].tolist(),
@@ -70,12 +70,12 @@ def analyze(y: np.ndarray, sr: int, config: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 def _tempo_curve(y: np.ndarray, sr: int) -> dict:
-    """Estima la variación de tempo en ventanas solapadas."""
+    """Estimates tempo variation in overlapping windows."""
     hop = 512
     oenv = librosa.onset.onset_strength(y=y, sr=sr, hop_length=hop)
-    # tempogram: filas = periodos, columnas = tiempo
+    # tempogram: rows = periods, columns = time
     tg = librosa.feature.tempogram(onset_envelope=oenv, sr=sr, hop_length=hop)
-    # Tempo dominante por ventana
+    # Dominant tempo per window
     tempo_per_frame = librosa.beat.tempo(onset_envelope=oenv, sr=sr, hop_length=hop, aggregate=None)
     times = librosa.frames_to_time(np.arange(len(tempo_per_frame)), sr=sr, hop_length=hop)
     step = max(1, len(times) // 500)
@@ -86,7 +86,7 @@ def _tempo_curve(y: np.ndarray, sr: int) -> dict:
 
 
 def _onset_deviations(onset_times: list, beat_times: list) -> list:
-    """Para cada onset, calcula la desviación al beat más cercano (ms)."""
+    """For each onset, calculates the deviation to the nearest beat (ms)."""
     if not beat_times:
         return []
     beats = np.array(beat_times)
@@ -98,7 +98,7 @@ def _onset_deviations(onset_times: list, beat_times: list) -> list:
 
 
 def _ioi_stats(onset_times: list) -> dict:
-    """Estadísticas de inter-onset interval."""
+    """Inter-onset interval statistics."""
     if len(onset_times) < 2:
         return {"mean_ms": 0.0, "std_ms": 0.0, "cv": 0.0}
     ioi = np.diff(onset_times) * 1000  # ms

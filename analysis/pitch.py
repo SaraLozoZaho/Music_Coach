@@ -1,7 +1,7 @@
 """
-Módulo de análisis de afinación usando CREPE.
-CREPE es monofónico — funciona bien con voz solista o instrumento único.
-Para señales polifónicas se recomienda separación de fuentes previa (Demucs).
+Pitch analysis module using CREPE.
+CREPE is monophonic — works best with a solo voice or single instrument.
+For polyphonic signals, source separation with Demucs is recommended first.
 """
 
 import numpy as np
@@ -9,16 +9,16 @@ import numpy as np
 
 def analyze(y: np.ndarray, sr: int, config: dict) -> dict:
     """
-    Analiza el pitch de la señal de audio.
+    Analyses the pitch of an audio signal.
 
-    Returns dict con:
-      - times: array de tiempos (s)
-      - frequencies: array de frecuencias estimadas (Hz)
-      - confidence: array de confianza CREPE [0,1]
-      - cents_deviation: desviación respecto a la nota más cercana (cents)
-      - stability_std: desviación estándar global del pitch (cents)
-      - in_tune_ratio: fracción del tiempo en ±tolerance_cents de la nota
-      - problematic_segments: lista de (t_start, t_end, mean_deviation_cents)
+    Returns dict with:
+      - times: array of time positions (s)
+      - frequencies: array of estimated frequencies (Hz)
+      - confidence: CREPE confidence array [0,1]
+      - cents_deviation: deviation from the nearest note (cents)
+      - stability_std: global pitch standard deviation (cents)
+      - in_tune_ratio: fraction of time within ±tolerance_cents of the note
+      - problematic_segments: list of {t_start, t_end, mean_deviation_cents}
     """
     try:
         import crepe
@@ -32,7 +32,7 @@ def analyze(y: np.ndarray, sr: int, config: dict) -> dict:
     tolerance = config.get("tolerance_cents", 20)
     stability_thr = config.get("stability_threshold", 15)
 
-    # Filtrar frames con confianza baja
+    # Filter low-confidence frames
     mask = confidence > 0.5
     if mask.sum() == 0:
         return _empty_result()
@@ -40,19 +40,19 @@ def analyze(y: np.ndarray, sr: int, config: dict) -> dict:
     freqs_valid = frequencies.copy()
     freqs_valid[~mask] = np.nan
 
-    # Convertir Hz → cents relativos a la nota MIDI más cercana
+    # Convert Hz → cents relative to nearest MIDI note
     cents_dev = _hz_to_cents_deviation(freqs_valid)
 
-    # Estabilidad global
+    # Global stability
     valid_cents = cents_dev[~np.isnan(cents_dev)]
     stability_std = float(np.std(valid_cents)) if len(valid_cents) > 0 else 0.0
 
-    # Porcentaje en afinación
+    # In-tune ratio
     in_tune_ratio = float(
         np.mean(np.abs(valid_cents) <= tolerance)
     ) if len(valid_cents) > 0 else 0.0
 
-    # Segmentos problemáticos: ventanas de 2 s con desviación media > tolerance
+    # Problematic segments: 2s windows where mean deviation > tolerance
     problematic = _find_problematic_segments(times, cents_dev, tolerance, window_s=2.0)
 
     return {
@@ -72,14 +72,14 @@ def analyze(y: np.ndarray, sr: int, config: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 def _hz_to_cents_deviation(frequencies: np.ndarray) -> np.ndarray:
-    """Devuelve la desviación en cents respecto a la nota MIDI más cercana."""
+    """Returns the deviation in cents from the nearest MIDI note."""
     cents_dev = np.full_like(frequencies, np.nan)
     valid = ~np.isnan(frequencies) & (frequencies > 0)
     f = frequencies[valid]
-    # Nota MIDI continua
+    # Continuous MIDI note
     midi_float = 69 + 12 * np.log2(f / 440.0)
     midi_nearest = np.round(midi_float)
-    # Frecuencia de la nota más cercana
+    # Frequency of the nearest note
     f_nearest = 440.0 * 2 ** ((midi_nearest - 69) / 12)
     cents_dev[valid] = 1200 * np.log2(f / f_nearest)
     return cents_dev
@@ -91,7 +91,7 @@ def _find_problematic_segments(
     tolerance: float,
     window_s: float = 2.0,
 ) -> list:
-    """Detecta ventanas donde la desviación media supera la tolerancia."""
+    """Finds windows where the mean deviation exceeds the tolerance."""
     if len(times) == 0:
         return []
 
@@ -119,7 +119,7 @@ def _find_problematic_segments(
 
 
 def _fallback_pitch(y: np.ndarray, sr: int, config: dict) -> dict:
-    """Fallback con pYIN de librosa si CREPE no está instalado."""
+    """Fallback using librosa's pYIN if CREPE is not installed."""
     import librosa
 
     tolerance = config.get("tolerance_cents", 20)

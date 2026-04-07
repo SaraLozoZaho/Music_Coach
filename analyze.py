@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-Music Coach — Punto de entrada CLI.
+Music Coach — CLI entry point.
 
-Uso:
-    python analyze.py grabacion.mp3
-    python analyze.py grabacion.mp3 --publish
-    python analyze.py grabacion.mp3 --separate          # análisis por instrumento
-    python analyze.py grabacion.mp3 --separate --publish
-    python analyze.py grabacion.mp3 --output-dir mi_carpeta/
-    python analyze.py grabacion.mp3 --config mi_config.yaml
+Usage:
+    python analyze.py recording.mp3
+    python analyze.py recording.mp3 --publish
+    python analyze.py recording.mp3 --separate          # per-instrument analysis
+    python analyze.py recording.mp3 --separate --publish
+    python analyze.py recording.mp3 --output-dir my_folder/
+    python analyze.py recording.mp3 --config my_config.yaml
 """
 
 import argparse
@@ -32,7 +32,7 @@ def load_config(path: str) -> dict:
         with open(path, "r", encoding="utf-8") as f:
             return yaml.safe_load(f)
     except FileNotFoundError:
-        print(f"[warn] config.yaml no encontrado en '{path}', usando valores por defecto.")
+        print(f"[warn] config.yaml not found at '{path}', using default values.")
         return {}
 
 
@@ -42,38 +42,38 @@ def _step(label: str):
 
 
 def _done(t0: float):
-    print(f"listo ({time.time() - t0:.1f}s)")
+    print(f"done ({time.time() - t0:.1f}s)")
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Music Coach — Analiza una grabación de ensayo y genera un informe HTML."
+        description="Music Coach — Analyses a rehearsal recording and generates an HTML report."
     )
-    parser.add_argument("audio_file", help="Ruta al archivo de audio (.mp3, .wav, .m4a, .ogg, .flac, .aac)")
-    parser.add_argument("--publish", action="store_true", help="Publicar en GitHub Pages tras el análisis")
-    parser.add_argument("--separate", action="store_true", help="Separar instrumentos con Demucs y analizar por pista")
-    parser.add_argument("--output-dir", default=None, help="Carpeta de salida para el informe (por defecto: docs/reports/)")
-    parser.add_argument("--config", default=DEFAULT_CONFIG, help="Ruta al archivo de configuración YAML")
-    parser.add_argument("--no-pitch", action="store_true", help="Omitir análisis de pitch global (más rápido)")
+    parser.add_argument("audio_file", help="Path to audio file (.mp3, .wav, .m4a, .ogg, .flac, .aac)")
+    parser.add_argument("--publish", action="store_true", help="Publish to GitHub Pages after analysis")
+    parser.add_argument("--separate", action="store_true", help="Separate instruments with Demucs and analyse per track")
+    parser.add_argument("--output-dir", default=None, help="Output folder for the report (default: docs/reports/)")
+    parser.add_argument("--config", default=DEFAULT_CONFIG, help="Path to YAML config file")
+    parser.add_argument("--no-pitch", action="store_true", help="Skip global pitch analysis (faster)")
     args = parser.parse_args()
 
     print("\n🎵 Music Coach\n")
 
-    # Configuración
+    # Config
     cfg = load_config(args.config)
     output_dir = args.output_dir or cfg.get("report", {}).get("output_dir", "docs/reports")
 
-    # 1. Ingesta
-    t = _step("Cargando audio")
+    # 1. Load audio
+    t = _step("Loading audio")
     try:
         y, sr, meta = ingest.load(args.audio_file)
     except (FileNotFoundError, ValueError, RuntimeError) as e:
         print(f"\n[error] {e}")
         sys.exit(1)
     _done(t)
-    print(f"     Archivo: {meta['filename']}  |  Duración: {meta['duration_s']}s  |  SR: {meta['original_sr']} Hz")
+    print(f"     File: {meta['filename']}  |  Duration: {meta['duration_s']}s  |  SR: {meta['original_sr']} Hz")
 
-    # 2. Análisis de pitch global
+    # 2. Global pitch analysis
     if args.no_pitch:
         pitch_results = {
             "times": [], "frequencies": [], "confidence": [],
@@ -81,47 +81,47 @@ def main():
             "in_tune_ratio": 0.0, "problematic_segments": [], "status": "skipped"
         }
     else:
-        t = _step("Análisis de afinación global (CREPE / pYIN)")
+        t = _step("Global pitch analysis (CREPE / pYIN)")
         pitch_results = pitch_mod.analyze(y, sr, cfg.get("pitch", {}))
         _done(t)
         if pitch_results.get("status") == "fallback_pyin":
-            print("     [info] CREPE no instalado — usando pYIN como fallback")
+            print("     [info] CREPE not installed — using pYIN as fallback")
 
-    # 3. Análisis rítmico global
-    t = _step("Análisis rítmico global")
+    # 3. Global rhythm analysis
+    t = _step("Global rhythm analysis")
     rhythm_results = rhythm_mod.analyze(y, sr, cfg.get("rhythm", {}))
     _done(t)
-    print(f"     Tempo: {rhythm_results['tempo_global']:.1f} BPM  |  Desv. media: {rhythm_results['mean_deviation_ms']:.1f} ms")
+    print(f"     Tempo: {rhythm_results['tempo_global']:.1f} BPM  |  Mean deviation: {rhythm_results['mean_deviation_ms']:.1f} ms")
 
-    # 4. Análisis de dinámica global
-    t = _step("Análisis de dinámica global")
+    # 4. Global dynamics analysis
+    t = _step("Global dynamics analysis")
     dynamics_results = dynamics_mod.analyze(y, sr, cfg.get("dynamics", {}))
     _done(t)
     lufs_str = f"  |  LUFS: {dynamics_results['lufs']}" if dynamics_results.get("lufs") else ""
-    print(f"     Rango dinámico: {dynamics_results['dynamic_range_db']} dB{lufs_str}")
+    print(f"     Dynamic range: {dynamics_results['dynamic_range_db']} dB{lufs_str}")
 
-    # 5. Análisis de calidad
-    t = _step("Análisis de calidad")
+    # 5. Quality analysis
+    t = _step("Quality analysis")
     quality_results = quality_mod.analyze(y, sr, cfg.get("quality", {}))
     _done(t)
-    print(f"     SNR estimado: {quality_results['snr_db']} dB")
+    print(f"     Estimated SNR: {quality_results['snr_db']} dB")
 
-    # 6. Separación de fuentes + análisis por instrumento (opcional)
+    # 6. Source separation + per-instrument analysis (optional)
     stem_results = None
     stem_summaries = None
     if args.separate:
         print()
-        print("  ── Análisis por instrumento ──────────────────────────────")
+        print("  ── Per-instrument analysis ───────────────────────────────")
         try:
             from analysis.separation import separate
             from analysis.per_stem import analyze_all, build_stem_summaries
 
-            t = _step("Separando fuentes con Demucs (htdemucs_6s)")
+            t = _step("Separating sources with Demucs (htdemucs_6s)")
             stems = separate(args.audio_file)
             _done(t)
-            print(f"     Stems separados: {', '.join(stems.keys())}")
+            print(f"     Separated stems: {', '.join(stems.keys())}")
 
-            t = _step("Analizando cada instrumento")
+            t = _step("Analysing each instrument")
             stem_results = analyze_all(stems, cfg)
             _done(t)
 
@@ -133,20 +133,20 @@ def main():
                 icon = {"green": "✅", "yellow": "⚠️", "red": "❌"}[summary["color"]]
                 print(f"     {icon}  {summary['instrument']}: {summary['label']}")
 
-            # Timing bajo vs batería
+            # Bass vs drums timing
             tc = stem_summaries.get("_timing_comparison")
             if tc and tc.get("verdict"):
-                print(f"\n     🎸 Bajo: {tc['verdict']}  (σ={tc['std_offset_ms']:.0f} ms)")
+                print(f"\n     🎸 Bass: {tc['verdict']}  (σ={tc['std_offset_ms']:.0f} ms)")
 
         except ImportError:
-            print("\n  [warn] Demucs no instalado. Instala con: pip install demucs")
-            print("  Continuando sin separación de fuentes...\n")
+            print("\n  [warn] Demucs not installed. Install with: pip install demucs")
+            print("  Continuing without source separation...\n")
         except RuntimeError as e:
-            print(f"\n  [error en separación] {e}\n")
+            print(f"\n  [error in separation] {e}\n")
         print()
 
-    # 7. Generación del informe
-    t = _step("Generando informe HTML")
+    # 7. Generate report
+    t = _step("Generating HTML report")
     report_path = report_gen.generate(
         meta=meta,
         pitch=pitch_results,
@@ -159,22 +159,22 @@ def main():
         stem_summaries=stem_summaries,
     )
     _done(t)
-    print(f"\n✅ Informe generado: {report_path}\n")
+    print(f"\n✅ Report generated: {report_path}\n")
 
-    # 8. Publicación (opcional)
+    # 8. Publish (optional)
     if args.publish:
         from deploy import github_pages
-        print("  → Publicando en GitHub Pages...")
+        print("  → Publishing to GitHub Pages...")
         try:
             url = github_pages.deploy(report_path)
-            print(f"\n🌐 Informe publicado: {url}\n")
+            print(f"\n🌐 Report published: {url}\n")
         except RuntimeError as e:
-            print(f"\n[error al publicar] {e}\n")
+            print(f"\n[publish error] {e}\n")
             sys.exit(1)
     else:
-        print("  Abre el informe en tu navegador:")
+        print("  Open the report in your browser:")
         print(f"  file://{report_path}\n")
-        print("  Para publicar en GitHub Pages, añade --publish\n")
+        print("  To publish to GitHub Pages, add --publish\n")
 
 
 if __name__ == "__main__":

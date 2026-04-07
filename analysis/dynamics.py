@@ -1,6 +1,6 @@
 """
-Módulo de análisis de dinámica.
-Métricas: curva RMS, rango dinámico, clipping, espectrograma, LUFS.
+Dynamics analysis module.
+Metrics: RMS curve, dynamic range, clipping, spectrogram, LUFS.
 """
 
 import numpy as np
@@ -9,15 +9,15 @@ import librosa
 
 def analyze(y: np.ndarray, sr: int, config: dict) -> dict:
     """
-    Analiza la dinámica de la señal de audio.
+    Analyses the dynamics of an audio signal.
 
-    Returns dict con:
-      - rms_times: tiempos del envelope RMS (s)
-      - rms_db: energía RMS en dB
-      - dynamic_range_db: diferencia p95-p5 del RMS (dB)
-      - clipping_ratio: fracción de muestras por encima del umbral de clipping
-      - lufs: loudness integrado EBU R128 (si pyloudnorm disponible)
-      - spectrogram: dict {times, freqs, magnitude_db} submuestreado
+    Returns dict with:
+      - rms_times: RMS envelope time positions (s)
+      - rms_db: RMS energy in dB
+      - dynamic_range_db: p95-p5 difference of RMS (dB)
+      - clipping_ratio: fraction of samples above the clipping threshold
+      - lufs: integrated loudness EBU R128 (if pyloudnorm is available)
+      - spectrogram: dict {times, freqs, magnitude_db} downsampled
     """
     min_range = config.get("min_dynamic_range_db", 10)
     clip_thr_db = config.get("clipping_threshold_db", -1)
@@ -26,25 +26,25 @@ def analyze(y: np.ndarray, sr: int, config: dict) -> dict:
     rms = librosa.feature.rms(y=y, hop_length=hop)[0]
     rms_times = librosa.frames_to_time(np.arange(len(rms)), sr=sr, hop_length=hop)
 
-    # Convertir a dB evitando log(0)
+    # Convert to dB avoiding log(0)
     rms_db = librosa.amplitude_to_db(rms, ref=np.max)
 
-    # Rango dinámico
+    # Dynamic range
     p5 = float(np.percentile(rms_db, 5))
     p95 = float(np.percentile(rms_db, 95))
     dynamic_range_db = round(p95 - p5, 1)
 
-    # Clipping: muestras que superan el umbral en dB
+    # Clipping: samples that exceed the threshold in dB
     clip_linear = librosa.db_to_amplitude(clip_thr_db)
     clipping_ratio = float(np.mean(np.abs(y) >= clip_linear))
 
     # LUFS
     lufs = _compute_lufs(y, sr)
 
-    # Espectrograma de amplitud (submuestreado)
+    # Amplitude spectrogram (downsampled)
     spec = np.abs(librosa.stft(y, hop_length=hop))
     spec_db = librosa.amplitude_to_db(spec, ref=np.max)
-    # Submuestrear frecuencias y tiempo para HTML ligero
+    # Downsample frequencies and time to keep HTML light
     freq_step = max(1, spec_db.shape[0] // 128)
     time_step = max(1, spec_db.shape[1] // 300)
     spec_sub = spec_db[::freq_step, ::time_step]
@@ -53,7 +53,7 @@ def analyze(y: np.ndarray, sr: int, config: dict) -> dict:
         np.arange(spec_db.shape[1]), sr=sr, hop_length=hop
     )[::time_step]
 
-    # Submuestrear RMS para HTML
+    # Downsample RMS for HTML
     rms_step = max(1, len(rms_times) // 1000)
 
     return {
@@ -72,11 +72,11 @@ def analyze(y: np.ndarray, sr: int, config: dict) -> dict:
 
 
 def _compute_lufs(y: np.ndarray, sr: int):
-    """Calcula LUFS integrado (EBU R128) con pyloudnorm."""
+    """Calculates integrated LUFS (EBU R128) using pyloudnorm."""
     try:
         import pyloudnorm as pyln
         meter = pyln.Meter(sr)
-        # pyloudnorm espera (samples, channels)
+        # pyloudnorm expects (samples, channels)
         audio_2d = y[:, np.newaxis] if y.ndim == 1 else y.T
         loudness = meter.integrated_loudness(audio_2d)
         return round(float(loudness), 1)
