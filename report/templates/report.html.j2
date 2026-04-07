@@ -113,29 +113,8 @@
   </div>
 </div>
 
-<!-- Gráficas -->
+<!-- Global charts -->
 <div class="grid">
-
-  <!-- Pitch track -->
-  <div class="card full">
-    <h2>Tuning — Pitch Track</h2>
-    <div class="chart-container" id="chart-pitch"></div>
-    {% if pitch.problematic_segments %}
-    <h3 style="margin-top:16px;">Problematic passages</h3>
-    <table>
-      <thead><tr><th>Start (s)</th><th>End (s)</th><th>Mean deviation (cents)</th></tr></thead>
-      <tbody>
-        {% for seg in pitch.problematic_segments %}
-        <tr>
-          <td>{{ seg.t_start | round(2) }}</td>
-          <td>{{ seg.t_end | round(2) }}</td>
-          <td><span class="tag red">{{ seg.mean_deviation_cents }}</span></td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    {% endif %}
-  </div>
 
   <!-- Tempo curve -->
   <div class="card full">
@@ -143,34 +122,10 @@
     <div class="chart-container" id="chart-tempo"></div>
   </div>
 
-  <!-- Onset deviation histogram -->
-  <div class="card">
-    <h2>Rhythm — Onset Deviations</h2>
-    <div class="chart-container" id="chart-onset-hist"></div>
-  </div>
-
-  <!-- Onset strength -->
-  <div class="card">
-    <h2>Rhythm — Onset Strength</h2>
-    <div class="chart-container" id="chart-onset-strength"></div>
-  </div>
-
   <!-- RMS -->
   <div class="card full">
     <h2>Dynamics — Volume Curve (RMS)</h2>
     <div class="chart-container" id="chart-rms"></div>
-  </div>
-
-  <!-- Spectrogram -->
-  <div class="card full">
-    <h2>Dynamics — Spectrogram</h2>
-    <div class="chart-container" id="chart-spec"></div>
-  </div>
-
-  <!-- Mel spectrogram -->
-  <div class="card full">
-    <h2>Quality — Mel Spectrogram</h2>
-    <div class="chart-container" id="chart-mel"></div>
   </div>
 
 </div>
@@ -198,32 +153,9 @@
 </h2>
 
 {% set STEM_ICONS = {"drums":"🥁","bass":"🎸","guitar":"🎸","piano":"🎹","vocals":"🎤","other":"🪘"} %}
+{% set timing_comparisons = stem_summaries.get("_timing_comparisons", {}) %}
 
-<!-- Bass vs drums timing -->
-{% set tc = stem_summaries.get("_timing_comparison", {}) %}
-{% if tc and tc.get("verdict") %}
-<div class="card full" style="margin-bottom:24px; border-color:{% if tc.mean_offset_ms|abs > 50 %}var(--red){% elif tc.mean_offset_ms|abs > 20 %}var(--yellow){% else %}var(--green){% endif %}">
-  <h2>🎸🥁 Bass vs Drums — Synchronisation</h2>
-  <div style="display:flex; gap:32px; flex-wrap:wrap; align-items:center; margin-bottom:16px">
-    <div>
-      <div class="metric-value">{{ tc.mean_offset_ms | round(1) }} ms</div>
-      <div class="metric-label">mean offset (+ = bass behind)</div>
-    </div>
-    <div>
-      <div class="metric-value">{{ tc.std_offset_ms | round(1) }} ms</div>
-      <div class="metric-label">variability (σ)</div>
-    </div>
-    <div>
-      <span class="tag {% if tc.mean_offset_ms|abs > 50 %}red{% elif tc.mean_offset_ms|abs > 20 %}yellow{% else %}green{% endif %}" style="font-size:1rem; padding:6px 14px">
-        {{ tc.verdict }}
-      </span>
-    </div>
-  </div>
-  <div class="chart-container" id="chart-timing-bass-drums"></div>
-</div>
-{% endif %}
-
-<!-- Tarjetas por instrumento -->
+<!-- Instrument cards -->
 {% for stem_name, data in stem_results.items() %}
 {% if not stem_name.startswith("_") %}
 {% set summary = stem_summaries.get(stem_name, {}) %}
@@ -267,9 +199,16 @@
       <div class="metric-label">dynamic range</div>
     </div>
     {% endif %}
+    {% set tc = timing_comparisons.get(stem_name, {}) %}
+    {% if tc and tc.get("verdict") %}
+    <div>
+      <div class="metric-value" style="font-size:1.4rem; color:{% if tc.mean_offset_ms|abs > 50 %}var(--red){% elif tc.mean_offset_ms|abs > 20 %}var(--yellow){% else %}var(--green){% endif %}">{{ tc.mean_offset_ms | round(1) }} ms</div>
+      <div class="metric-label">offset vs drums (+ = behind)</div>
+    </div>
+    {% endif %}
   </div>
 
-  <!-- Gráficas del instrumento -->
+  <!-- Instrument charts -->
   <div class="grid" style="margin-bottom:12px">
     {% if data.get("rhythm") %}
     <div class="card" style="padding:12px">
@@ -291,6 +230,13 @@
     <div class="card" style="padding:12px">
       <h3>RMS Volume</h3>
       <div id="chart-{{ stem_name }}-rms"></div>
+    </div>
+    {% endif %}
+    {% set tc = timing_comparisons.get(stem_name, {}) %}
+    {% if tc and tc.get("offsets_ms") %}
+    <div class="card" style="padding:12px">
+      <h3>Timing vs Drums (ms) — <span style="color:{% if tc.mean_offset_ms|abs > 50 %}var(--red){% elif tc.mean_offset_ms|abs > 20 %}var(--yellow){% else %}var(--green){% endif %}">{{ tc.verdict }}</span></h3>
+      <div id="chart-{{ stem_name }}-timing"></div>
     </div>
     {% endif %}
   </div>
@@ -332,27 +278,7 @@ const DARK = {
   margin: { l: 50, r: 20, t: 20, b: 40 }
 };
 
-// ── Pitch track ──
-(function() {
-  const times = {{ pitch.times | tojson }};
-  const cents = {{ pitch.cents_deviation | tojson }};
-  const conf  = {{ pitch.confidence | tojson }};
-  if (!times.length) return;
-  const trace = {
-    x: times, y: cents, mode: 'lines',
-    line: { color: '#7c6fff', width: 1.5 },
-    name: 'Dev. (cents)'
-  };
-  const zone_pos = { x: [times[0], times[times.length-1]], y: [{{ config.pitch.tolerance_cents }}, {{ config.pitch.tolerance_cents }}], mode:'lines', line:{color:'#2ecc71',dash:'dot',width:1}, name:'+{{ config.pitch.tolerance_cents }} c', showlegend:false };
-  const zone_neg = { x: [times[0], times[times.length-1]], y: [-{{ config.pitch.tolerance_cents }}, -{{ config.pitch.tolerance_cents }}], mode:'lines', line:{color:'#2ecc71',dash:'dot',width:1}, name:'-{{ config.pitch.tolerance_cents }} c', showlegend:false };
-  Plotly.newPlot('chart-pitch', [zone_pos, zone_neg, trace], Object.assign({}, DARK, {
-    xaxis: Object.assign({}, DARK.xaxis, {title:'Time (s)'}),
-    yaxis: Object.assign({}, DARK.yaxis, {title:'Cents'}),
-    height: 220
-  }), {responsive:true, displayModeBar:false});
-})();
-
-// ── Curva de tempo ──
+// ── Tempo curve ──
 (function() {
   const d = {{ rhythm.tempo_curve | tojson }};
   if (!d.times.length) return;
@@ -362,35 +288,6 @@ const DARK = {
   }], Object.assign({}, DARK, {
     xaxis: Object.assign({}, DARK.xaxis, {title:'Time (s)'}),
     yaxis: Object.assign({}, DARK.yaxis, {title:'BPM'}),
-    height: 220
-  }), {responsive:true, displayModeBar:false});
-})();
-
-// ── Histograma desviaciones ──
-(function() {
-  const devs = {{ rhythm.onset_deviations_ms | tojson }};
-  if (!devs.length) return;
-  Plotly.newPlot('chart-onset-hist', [{
-    x: devs, type:'histogram', nbinsx: 40,
-    marker:{color:'#e74c3c'}
-  }], Object.assign({}, DARK, {
-    xaxis: Object.assign({}, DARK.xaxis, {title:'Deviation (ms)'}),
-    yaxis: Object.assign({}, DARK.yaxis, {title:'Onsets (count)'}),
-    height: 220
-  }), {responsive:true, displayModeBar:false});
-})();
-
-// ── Onset strength ──
-(function() {
-  const d = {{ rhythm.onset_strength | tojson }};
-  if (!d.times.length) return;
-  Plotly.newPlot('chart-onset-strength', [{
-    x: d.times, y: d.strength, mode:'lines',
-    line:{color:'#e67e22',width:1}, fill:'tozeroy',
-    fillcolor:'rgba(230,126,34,0.2)'
-  }], Object.assign({}, DARK, {
-    xaxis: Object.assign({}, DARK.xaxis, {title:'Time (s)'}),
-    yaxis: Object.assign({}, DARK.yaxis, {title:'Strength'}),
     height: 220
   }), {responsive:true, displayModeBar:false});
 })();
@@ -408,34 +305,6 @@ const DARK = {
   }), {responsive:true, displayModeBar:false});
 })();
 
-// ── Espectrograma ──
-(function() {
-  const d = {{ dynamics.spectrogram | tojson }};
-  Plotly.newPlot('chart-spec', [{
-    z: d.magnitude_db, x: d.times, y: d.freqs,
-    type:'heatmap', colorscale:'Viridis',
-    colorbar:{title:'dB', tickfont:{size:10}}
-  }], Object.assign({}, DARK, {
-    xaxis: Object.assign({}, DARK.xaxis, {title:'Time (s)'}),
-    yaxis: Object.assign({}, DARK.yaxis, {title:'Frequency (Hz)', type:'log'}),
-    height: 250
-  }), {responsive:true, displayModeBar:false});
-})();
-
-// ── Mel spectrogram ──
-(function() {
-  const d = {{ quality.mel_spectrogram | tojson }};
-  Plotly.newPlot('chart-mel', [{
-    z: d.magnitude_db, x: d.times, y: d.freqs_mel,
-    type:'heatmap', colorscale:'Plasma',
-    colorbar:{title:'dB', tickfont:{size:10}}
-  }], Object.assign({}, DARK, {
-    xaxis: Object.assign({}, DARK.xaxis, {title:'Time (s)'}),
-    yaxis: Object.assign({}, DARK.yaxis, {title:'Mel freq. (Hz)'}),
-    height: 250
-  }), {responsive:true, displayModeBar:false});
-})();
-
 {% if stem_results %}
 // ── Gráficas por instrumento ──────────────────────────────────────────
 
@@ -444,23 +313,24 @@ const STEM_COLORS = {
   piano:'#9b59b6', vocals:'#f39c12', other:'#1abc9c'
 };
 
-{% set tc = stem_summaries.get("_timing_comparison", {}) %}
+{% set timing_comparisons = stem_summaries.get("_timing_comparisons", {}) %}
+{% for tc_stem, tc in timing_comparisons.items() %}
 {% if tc and tc.get("offsets_ms") %}
-// Timing bajo vs batería
 (function() {
   const offsets = {{ tc.offsets_ms | tojson }};
   if (!offsets.length) return;
-  Plotly.newPlot('chart-timing-bass-drums', [{
-    x: offsets, type:'histogram', nbinsx:50,
-    marker:{color:'#3498db'}
+  const color = STEM_COLORS['{{ tc_stem }}'] || '#7c6fff';
+  Plotly.newPlot('chart-{{ tc_stem }}-timing', [{
+    x: offsets, type:'histogram', nbinsx:50, marker:{color:color}
   }], Object.assign({}, DARK, {
-    xaxis: Object.assign({}, DARK.xaxis, {title:'Bass vs Drums offset (ms)', zeroline:true}),
+    xaxis: Object.assign({}, DARK.xaxis, {title:'Offset vs drums (ms)', zeroline:true}),
     yaxis: Object.assign({}, DARK.yaxis, {title:'Count'}),
-    height: 200,
+    height: 160,
     shapes:[{type:'line',x0:0,x1:0,y0:0,y1:1,yref:'paper',line:{color:'#e74c3c',dash:'dot',width:2}}]
   }), {responsive:true, displayModeBar:false});
 })();
 {% endif %}
+{% endfor %}
 
 {% for stem_name, data in stem_results.items() %}
 {% if not stem_name.startswith("_") %}

@@ -25,9 +25,9 @@ from analysis.separation import STEM_LABELS
 STEM_ANALYSES = {
     "drums":  ["rhythm", "dynamics"],
     "bass":   ["rhythm", "pitch", "dynamics"],
-    "guitar": ["pitch", "dynamics"],
-    "piano":  ["pitch", "dynamics"],
-    "vocals": ["pitch", "dynamics"],
+    "guitar": ["rhythm", "pitch", "dynamics"],
+    "piano":  ["rhythm", "pitch", "dynamics"],
+    "vocals": ["rhythm", "pitch", "dynamics"],
     "other":  ["rhythm", "dynamics"],
 }
 
@@ -55,12 +55,16 @@ def analyze_all(stems: dict, config: dict) -> dict:
 
         results[stem_name] = result
 
-    # Timing comparison: bass vs drums
-    if "bass" in results and "drums" in results:
-        results["_timing_comparison"] = _compare_timing(
-            results["bass"]["rhythm"],
-            results["drums"]["rhythm"],
-        )
+    # Timing comparisons: each melodic instrument vs drums
+    if "drums" in results:
+        comparisons = {}
+        for stem_name in ("bass", "guitar", "piano", "vocals"):
+            if stem_name in results:
+                comparisons[stem_name] = _compare_timing(
+                    results[stem_name]["rhythm"],
+                    results["drums"]["rhythm"],
+                )
+        results["_timing_comparisons"] = comparisons
 
     return results
 
@@ -164,9 +168,8 @@ def build_stem_summaries(stem_results: dict, config: dict) -> dict:
             "instrument": STEM_LABELS.get(stem_name, stem_name),
         }
 
-    # Add timing comparison if available
-    if "_timing_comparison" in stem_results:
-        tc = stem_results["_timing_comparison"]
-        summaries["_timing_comparison"] = tc
+    # Add per-stem timing comparisons if available
+    if "_timing_comparisons" in stem_results:
+        summaries["_timing_comparisons"] = stem_results["_timing_comparisons"]
 
     return summaries

@@ -255,17 +255,23 @@ STEM_ADVICE = {
         "pitch_bad":   "Tune before each rehearsal and check tuning every 15-20 minutes, especially on the higher strings.",
         "pitch_ok":    "Tuning is correct.",
         "rhythm_bad":  "Work on chord changes with a metronome so there are no gaps between them.",
+        "timing_late": "You tend to play behind the drums. Anticipate each chord change slightly earlier.",
+        "timing_early":"You tend to rush ahead of the drums. Listen more to the kick drum and stay locked in.",
     },
     "piano": {
         "pitch_bad":   "The piano may need tuning by a technician if notes sound off-centre.",
         "pitch_ok":    "Tuning is correct.",
         "rhythm_bad":  "Pay attention to tempo in fast passages. Practise at reduced speed.",
+        "timing_late": "You tend to play behind the drums. Watch the drummer and lock in with the hi-hat.",
+        "timing_early":"You tend to rush. Breathe and wait for the beat before each entry.",
     },
     "vocals": {
         "pitch_bad":   "Warm up your voice before rehearsal and practise with a drone reference to internalise pitch.",
         "pitch_ok":    "Vocal tuning is correct.",
         "rhythm_bad":  "Work on rhythmic diction — each syllable must fall on the right beat.",
         "stability":   "Vibrato or pitch fluctuation is excessive. Work on diaphragm support.",
+        "timing_late": "Vocal entries tend to arrive late. Prepare each entry mentally a beat before it happens.",
+        "timing_early":"Vocal entries tend to rush. Listen carefully to the drums and wait for your cue.",
     },
     "other": {
         "rhythm_bad":  "Additional percussion must be in sync with the drums. Practise together.",
@@ -324,17 +330,19 @@ def _build_stem_recommendations(stem_results: dict, stem_summaries: dict, config
 
         recs[stem_name] = stem_recs
 
-    # Bass vs drums timing
-    tc = stem_results.get("_timing_comparison", {})
-    if tc.get("verdict") and tc["verdict"] != "in sync":
+    # Timing vs drums for all melodic instruments
+    timing_comparisons = stem_results.get("_timing_comparisons", {})
+    for stem_name, tc in timing_comparisons.items():
+        if not tc.get("verdict") or tc["verdict"] == "in sync":
+            continue
         mean_off = tc["mean_offset_ms"]
         key = "timing_late" if mean_off > 0 else "timing_early"
-        bass_advice = STEM_ADVICE.get("bass", {}).get(key, tc["verdict"])
-        if "bass" in recs:
-            recs["bass"].insert(0, {
-                "icon": "🎸",
+        advice_text = STEM_ADVICE.get(stem_name, {}).get(key, tc["verdict"])
+        if stem_name in recs:
+            recs[stem_name].insert(0, {
+                "icon": "🥁",
                 "title": f"Timing vs Drums — {tc['verdict']}",
-                "text": bass_advice,
+                "text": advice_text,
                 "severity": "red" if abs(mean_off) > 50 else "yellow",
             })
 

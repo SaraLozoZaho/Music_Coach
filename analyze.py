@@ -133,10 +133,11 @@ def main():
                 icon = {"green": "✅", "yellow": "⚠️", "red": "❌"}[summary["color"]]
                 print(f"     {icon}  {summary['instrument']}: {summary['label']}")
 
-            # Bass vs drums timing
-            tc = stem_summaries.get("_timing_comparison")
-            if tc and tc.get("verdict"):
-                print(f"\n     🎸 Bass: {tc['verdict']}  (σ={tc['std_offset_ms']:.0f} ms)")
+            # Timing vs drums for each instrument
+            for tc_stem, tc in stem_summaries.get("_timing_comparisons", {}).items():
+                if tc.get("verdict"):
+                    label = stem_summaries.get(tc_stem, {}).get("instrument", tc_stem)
+                    print(f"     🥁 {label}: {tc['verdict']}  (σ={tc['std_offset_ms']:.0f} ms)")
 
         except ImportError:
             print("\n  [warn] Demucs not installed. Install with: pip install demucs")
